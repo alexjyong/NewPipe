@@ -51,6 +51,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
 import org.schabi.newpipe.fragments.OnScrollBelowItemsListener;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
+import org.schabi.newpipe.gif.GifCreationDialog;
 import org.schabi.newpipe.info_list.StreamSegmentAdapter;
 import org.schabi.newpipe.info_list.StreamSegmentItem;
 import org.schabi.newpipe.ktx.AnimationType;
@@ -172,6 +173,18 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
                 getParentActivity().map(FragmentActivity::getSupportFragmentManager)
                         .ifPresent(fragmentManager ->
                                 PlaylistDialog.showForPlayQueue(player, fragmentManager)));
+
+        binding.gifCreationButton.setOnClickListener(makeOnClickListener(() ->
+                player.getCurrentStreamInfo().ifPresent(info -> {
+                    final long positionMs = player.getExoPlayer() != null
+                            ? player.getExoPlayer().getCurrentPosition() : 0;
+                    getParentActivity().ifPresent(activity -> {
+                        final GifCreationDialog dialog =
+                                new GifCreationDialog(activity, info, positionMs);
+                        dialog.show(activity.getSupportFragmentManager(),
+                                "gifCreationDialog");
+                    });
+                })));
 
         settingsContentObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override

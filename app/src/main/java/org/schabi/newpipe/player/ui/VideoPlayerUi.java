@@ -247,6 +247,9 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
         ));
         binding.switchMute.setOnClickListener(makeOnClickListener(player::toggleMute));
 
+        // GIF button click is handled in MainPlayerUi, which has access
+        // to the parent activity's FragmentManager.
+
         ViewCompat.setOnApplyWindowInsetsListener(binding.itemsListPanel, (view, windowInsets) -> {
             final Insets cutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
             if (!cutout.equals(Insets.NONE)) {
@@ -306,6 +309,7 @@ public abstract class VideoPlayerUi extends PlayerUi implements SeekBar.OnSeekBa
         binding.openInBrowser.setOnClickListener(null);
         binding.playerCloseButton.setOnClickListener(null);
         binding.switchMute.setOnClickListener(null);
+        binding.gifCreationButton.setOnClickListener(null);
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.itemsListPanel, null);
 

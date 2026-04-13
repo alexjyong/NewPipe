@@ -909,4 +909,18 @@
     <string name="sign_in_confirm_not_bot_error">%1$s refused to provide data, asking for a login to confirm the requester is not a bot.\n\nYour IP might have been temporarily banned by %1$s, you can wait some time or switch to a different IP (for example by turning on/off a VPN, or by switching from WiFi to mobile data).</string>
     <string name="unsupported_content_in_country">This content is not available for the currently selected content country.\n\nChange your selection from \"Settings > Content > Default content country\".</string>
     <string name="navigate_back">Navigate back</string>
+
+    <!-- GIF creation -->
+    <string name="gif_creation">Create GIF</string>
+    <string name="gif_creation_title">Create GIF</string>
+    <string name="gif_format_gif">GIF</string>
+    <string name="gif_format_webp">WebP</string>
+    <string name="gif_optimize">Optimize file size</string>
+    <string name="gif_add_text">Add Text</string>
+    <string name="gif_add_text_stub_toast">Text overlay coming in a future update</string>
+    <string name="gif_time_range_error">Clip must be between 1 and 15 seconds</string>
+    <string name="gif_creating_notification">Creating %s\u2026</string>
+    <string name="gif_saved_notification">%s saved</string>
+    <string name="gif_saved_to_downloads">Saved to Downloads</string>
+    <string name="gif_creation_failed">Failed to create %s</string>
 </resources>

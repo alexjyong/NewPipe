@@ -86,6 +86,7 @@ import org.schabi.newpipe.fragments.EmptyFragment
 import org.schabi.newpipe.fragments.MainFragment
 import org.schabi.newpipe.fragments.list.comments.CommentsFragment.Companion.getInstance
 import org.schabi.newpipe.fragments.list.videos.RelatedItemsFragment.Companion.getInstance
+import org.schabi.newpipe.gif.GifCreationDialog
 import org.schabi.newpipe.ktx.AnimationType
 import org.schabi.newpipe.ktx.animate
 import org.schabi.newpipe.ktx.animateRotation
@@ -457,6 +458,11 @@ class VideoDetailFragment :
         binding.detailControlsOpenInBrowser.setOnClickListener(
             makeOnClickListener { info ->
                 ShareUtils.openUrlInBrowser(requireContext(), info.url)
+            }
+        )
+        binding.detailControlsGif?.setOnClickListener(
+            makeOnClickListener { info ->
+                openGifCreationDialog(info)
             }
         )
         binding.detailControlsPlayWithKodi.setOnClickListener(
@@ -1522,6 +1528,7 @@ class VideoDetailFragment :
         }
 
         binding.detailControlsDownload.isVisible = !StreamTypeUtil.isLiveStream(info.streamType)
+        binding.detailControlsGif?.isVisible = !StreamTypeUtil.isLiveStream(info.streamType)
 
         val hasAudioStreams = info.videoStreams.isNotEmpty() || info.audioStreams.isNotEmpty()
         binding.detailControlsBackground.isVisible = hasAudioStreams
@@ -1593,6 +1600,19 @@ class VideoDetailFragment :
             showSnackbar(
                 activity,
                 ErrorInfo(e, UserAction.DOWNLOAD_OPEN_DIALOG, "Showing download dialog", info)
+            )
+        }
+    }
+
+    private fun openGifCreationDialog(info: StreamInfo) {
+        try {
+            val positionMs = player?.exoPlayer?.currentPosition ?: 0L
+            val dialog = GifCreationDialog(requireContext(), info, positionMs)
+            dialog.show(parentFragmentManager, "gifCreationDialog")
+        } catch (e: Exception) {
+            showSnackbar(
+                activity,
+                ErrorInfo(e, UserAction.SOMETHING_ELSE, "Showing GIF creation dialog", info)
             )
         }
     }
@@ -1958,6 +1978,7 @@ class VideoDetailFragment :
             binding.detailControlsPopup.setBackgroundColor(transparent)
             binding.detailControlsDownload.setBackgroundColor(transparent)
             binding.detailControlsShare.setBackgroundColor(transparent)
+            binding.detailControlsGif?.setBackgroundColor(transparent)
             binding.detailControlsOpenInBrowser.setBackgroundColor(transparent)
             binding.detailControlsPlayWithKodi.setBackgroundColor(transparent)
         }

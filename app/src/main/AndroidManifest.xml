@@ -144,6 +144,10 @@
             android:name="us.shandian.giga.service.DownloadManagerService"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name=".gif.GifCreationService"
+            android:foregroundServiceType="dataSync" />
+
         <activity
             android:name=".util.FilePickerActivityHelper"
             android:exported="true"
