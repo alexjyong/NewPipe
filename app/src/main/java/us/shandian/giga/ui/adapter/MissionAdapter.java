@@ -68,6 +68,10 @@ import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -358,7 +362,45 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         Intent chooserIntent = createChooser(viewIntent, null);
         chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | FLAG_GRANT_READ_URI_PERMISSION);
 
-        ShareUtils.openIntentInApp(mContext, chooserIntent);
+        try {
+            ShareUtils.openIntentInApp(mContext, chooserIntent);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Lost URI permission for SAF file, falling back to cache copy", e);
+            openFileViaCache(mission, mimeType);
+        }
+    }
+
+    private void openFileViaCache(Mission mission, String mimeType) {
+        try {
+            final Uri safUri = mission.storage.getUri();
+            final File cacheFile = new File(mContext.getCacheDir(), mission.storage.getName());
+
+            try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
+                 OutputStream os = new FileOutputStream(cacheFile)) {
+                if (is == null) {
+                    Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                is.transferTo(os);
+            }
+
+            final Uri fileUri = FileProvider.getUriForFile(
+                    mContext,
+                    BuildConfig.APPLICATION_ID + ".provider",
+                    cacheFile);
+
+            Intent viewIntent = new Intent(Intent.ACTION_VIEW);
+            viewIntent.setDataAndType(fileUri, mimeType);
+            viewIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+            Intent chooserIntent = createChooser(viewIntent, null);
+            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | FLAG_GRANT_READ_URI_PERMISSION);
+
+            ShareUtils.openIntentInApp(mContext, chooserIntent);
+        } catch (IOException | IllegalArgumentException e) {
+            Log.e(TAG, "Failed to open file via cache fallback", e);
+            Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void shareFile(Mission mission) {
@@ -378,7 +420,50 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
 
-        mContext.startActivity(intent);
+        try {
+            mContext.startActivity(intent);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Lost URI permission for SAF file during share, falling back to cache", e);
+            shareFileViaCache(mission);
+        }
+    }
+
+    private void shareFileViaCache(Mission mission) {
+        try {
+            final Uri safUri = mission.storage.getUri();
+            final File cacheFile = new File(mContext.getCacheDir(), mission.storage.getName());
+
+            try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
+                 OutputStream os = new FileOutputStream(cacheFile)) {
+                if (is == null) {
+                    Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                is.transferTo(os);
+            }
+
+            final Uri fileUri = FileProvider.getUriForFile(
+                    mContext,
+                    BuildConfig.APPLICATION_ID + ".provider",
+                    cacheFile);
+
+            final Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType(resolveMimeType(mission));
+            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            shareIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+            final Intent intent = createChooser(shareIntent, null);
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1) {
+                intent.putExtra(Intent.EXTRA_TITLE, mContext.getString(R.string.share_dialog_title));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+            mContext.startActivity(intent);
+        } catch (IOException | IllegalArgumentException e) {
+            Log.e(TAG, "Failed to share file via cache fallback", e);
+            Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
+        }
     }
 
     /**

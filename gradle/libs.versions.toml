@@ -7,6 +7,7 @@
 about-libraries = "11.2.3"
 acra = "5.13.1"
 agp = "8.13.2"
+animated-gif-lib = "0.10.1"
 appcompat = "1.7.1"
 assertj = "3.27.7"
 autoservice-google = "1.1.1"
@@ -111,6 +112,7 @@ androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefre
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-work-rxjava3 = { module = "androidx.work:work-rxjava3", version.ref = "work" }
+animated-gif-lib = { module = "com.squareup:gifencoder", version.ref = "animated-gif-lib" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }

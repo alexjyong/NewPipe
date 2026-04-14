@@ -326,6 +326,9 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // GIF encoding
+    implementation(libs.animated.gif.lib)
+
     // Markdown library for Android
     implementation(libs.noties.markwon.core)
     implementation(libs.noties.markwon.linkify)

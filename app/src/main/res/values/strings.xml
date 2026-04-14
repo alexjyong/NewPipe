@@ -918,9 +918,15 @@
     <string name="gif_optimize">Optimize file size</string>
     <string name="gif_add_text">Add Text</string>
     <string name="gif_add_text_stub_toast">Text overlay coming in a future update</string>
-    <string name="gif_time_range_error">Clip must be between 1 and 15 seconds</string>
+    <string name="gif_time_range_error">Clip must be at least 1 second</string>
+    <string name="gif_long_clip_warning">Long clips may produce large files</string>
     <string name="gif_creating_notification">Creating %s\u2026</string>
     <string name="gif_saved_notification">%s saved</string>
     <string name="gif_saved_to_downloads">Saved to Downloads</string>
     <string name="gif_creation_failed">Failed to create %s</string>
+    <string name="gif_creation_started">GIF creation started in background</string>
+    <string name="create_gif">Create GIF</string>
+    <string name="gif_start_time">Start</string>
+    <string name="gif_end_time">End</string>
+    <string name="clip_time_range">Time Range</string>
 </resources>

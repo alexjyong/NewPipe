@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Objects;
 
 import us.shandian.giga.get.DownloadMission;
+import us.shandian.giga.get.FinishedMission;
 import us.shandian.giga.get.MissionRecoveryInfo;
 import us.shandian.giga.postprocessing.Postprocessing;
 import us.shandian.giga.service.DownloadManager.NetworkState;
@@ -558,6 +559,10 @@ public class DownloadManagerService extends Service {
 
         public void addMissionEventListener(Callback handler) {
             mEchoObservers.add(handler);
+        }
+
+        public void addFinishedMission(final FinishedMission mission) {
+            mManager.addFinishedMission(mission);
         }
 
         public void removeMissionEventListener(Callback handler) {

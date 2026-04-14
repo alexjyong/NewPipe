@@ -200,6 +200,12 @@ public class FinishedMissionStore extends SQLiteOpenHelper {
         database.insert(FINISHED_TABLE_NAME, null, values);
     }
 
+    public void addFinishedMission(@NonNull final FinishedMission mission) {
+        final ContentValues values = getValuesOfMission(mission);
+        final SQLiteDatabase database = getWritableDatabase();
+        database.insert(FINISHED_TABLE_NAME, null, values);
+    }
+
     public void deleteMission(Mission mission) {
         String ts = String.valueOf(Objects.requireNonNull(mission).timestamp);
 

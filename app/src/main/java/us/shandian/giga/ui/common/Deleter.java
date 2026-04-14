@@ -88,8 +88,9 @@ public class Deleter {
         if (items.size() < 1) return;
 
         final Optional<String> fileToBeDeleted = items.stream()
-                .filter(Pair::getSecond)
+                .filter(pair -> Boolean.TRUE.equals(pair.getSecond()))
                 .map(p -> p.getFirst().storage.getName())
+                .filter(name -> name != null)
                 .findFirst();
 
         String msg;

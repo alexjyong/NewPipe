@@ -5,26 +5,29 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ContentValues;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
 import android.os.IBinder;
-import android.provider.MediaStore;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.download.DownloadActivity;
+import org.schabi.newpipe.streams.io.SharpStream;
+import org.schabi.newpipe.streams.io.StoredFileHelper;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.List;
+
+import us.shandian.giga.get.FinishedMission;
+import us.shandian.giga.service.DownloadManagerService;
 
 public class GifCreationService extends Service {
 
@@ -39,6 +42,7 @@ public class GifCreationService extends Service {
     public static final String EXTRA_OPTIMIZE = "optimize";
     public static final String EXTRA_FILE_NAME = "file_name";
     public static final String EXTRA_VIDEO_TITLE = "video_title";
+    public static final String EXTRA_OUTPUT_URI = "output_uri";
 
     private static final int OUTPUT_WIDTH = 480;
     private static final int GIF_FPS = 10;
@@ -62,8 +66,8 @@ public class GifCreationService extends Service {
         final long endMs = intent.getLongExtra(EXTRA_END_MS, 0);
         final String format = intent.getStringExtra(EXTRA_FORMAT);
         final boolean optimize = intent.getBooleanExtra(EXTRA_OPTIMIZE, true);
-        final String fileName = intent.getStringExtra(EXTRA_FILE_NAME);
         final String videoTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE);
+        final String outputUri = intent.getStringExtra(EXTRA_OUTPUT_URI);
 
         final String displayName = videoTitle != null ? videoTitle : "GIF";
         final Notification notification = buildProgressNotification(displayName);
@@ -72,7 +76,7 @@ public class GifCreationService extends Service {
         new Thread(() -> {
             try {
                 processGifCreation(streamUrl, startMs, endMs, format,
-                        optimize, fileName, displayName);
+                        optimize, displayName, outputUri);
             } catch (final Exception e) {
                 Log.e(TAG, "GIF creation failed", e);
                 showErrorNotification(displayName, e);
@@ -87,8 +91,9 @@ public class GifCreationService extends Service {
 
     private void processGifCreation(final String streamUrl, final long startMs,
                                     final long endMs, final String format,
-                                    final boolean optimize, final String fileName,
-                                    final String displayName) throws IOException {
+                                    final boolean optimize,
+                                    final String displayName,
+                                    final String outputUri) throws Exception {
         final boolean isGif = "gif".equals(format);
         final int fps = isGif ? GIF_FPS : WEBP_FPS;
 
@@ -99,7 +104,6 @@ public class GifCreationService extends Service {
             throw new IOException("No frames were extracted from the video");
         }
 
-        // Run through the text overlay stub (no-op for now)
         final List<Bitmap> processedFrames = TextOverlayStub.apply(frames);
 
         final byte[] encoded;
@@ -110,60 +114,60 @@ public class GifCreationService extends Service {
         }
 
         final String mimeType = isGif ? "image/gif" : "image/webp";
-        final Uri savedUri = saveToMediaStore(fileName, mimeType, encoded);
+        writeOutput(outputUri, mimeType, encoded);
 
-        // Recycle bitmaps
         for (final Bitmap bmp : processedFrames) {
             bmp.recycle();
         }
 
-        showCompletionNotification(displayName, savedUri);
+        addToDownloadQueue(streamUrl, outputUri, mimeType, encoded.length, isGif);
+        showCompletionNotification(displayName);
     }
 
-    private Uri saveToMediaStore(final String fileName, final String mimeType,
-                                 final byte[] data) throws IOException {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            return saveViaMediaStore(fileName, mimeType, data);
-        } else {
-            return saveLegacy(fileName, data);
+    private void writeOutput(final String outputUri, final String mimeType,
+                             final byte[] data) throws IOException {
+        if (outputUri == null) {
+            throw new IOException("No output URI provided");
+        }
+
+        final StoredFileHelper file = new StoredFileHelper(
+                this, Uri.parse(outputUri), mimeType);
+        try (SharpStream stream = file.getStream()) {
+            stream.write(data);
         }
     }
 
-    private Uri saveViaMediaStore(final String fileName, final String mimeType,
-                                  final byte[] data) throws IOException {
-        final ContentValues values = new ContentValues();
-        values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
-        values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
-        values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-
-        final Uri collection = MediaStore.Downloads.getContentUri(
-                MediaStore.VOLUME_EXTERNAL_PRIMARY);
-        final Uri itemUri = getContentResolver().insert(collection, values);
-        if (itemUri == null) {
-            throw new IOException("Failed to create MediaStore entry for " + fileName);
-        }
-
-        try (OutputStream os = getContentResolver().openOutputStream(itemUri)) {
-            if (os == null) {
-                throw new IOException("Cannot open output stream for " + itemUri);
+    private void addToDownloadQueue(final String sourceUrl, final String outputUri,
+                                    final String mimeType, final long fileSize,
+                                    final boolean isGif) {
+        final Context ctx = this;
+        final Intent bindIntent = new Intent(ctx, DownloadManagerService.class);
+        bindService(bindIntent, new ServiceConnection() {
+            @Override
+            public void onServiceConnected(final ComponentName name, final IBinder service) {
+                try {
+                    final DownloadManagerService.DownloadManagerBinder binder =
+                            (DownloadManagerService.DownloadManagerBinder) service;
+                    final FinishedMission mission = new FinishedMission();
+                    mission.source = sourceUrl != null ? sourceUrl : "";
+                    mission.length = fileSize;
+                    mission.timestamp = System.currentTimeMillis();
+                    mission.kind = isGif ? 'g' : 'w';
+                    mission.storage = new StoredFileHelper(
+                            ctx, Uri.parse(outputUri), mimeType);
+                    binder.addFinishedMission(mission);
+                } catch (final Exception e) {
+                    Log.e(TAG, "Failed to add GIF to download queue", e);
+                } finally {
+                    unbindService(this);
+                }
             }
-            os.write(data);
-        }
-        return itemUri;
-    }
 
-    @SuppressWarnings("deprecation")
-    private Uri saveLegacy(final String fileName, final byte[] data) throws IOException {
-        final File dir = Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS);
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new IOException("Cannot create download directory");
-        }
-        final File file = new File(dir, fileName);
-        try (OutputStream os = new FileOutputStream(file)) {
-            os.write(data);
-        }
-        return Uri.fromFile(file);
+            @Override
+            public void onServiceDisconnected(final ComponentName name) {
+                // no-op
+            }
+        }, Context.BIND_AUTO_CREATE);
     }
 
     private void createNotificationChannel() {
@@ -181,26 +185,21 @@ public class GifCreationService extends Service {
 
     private Notification buildProgressNotification(final String displayName) {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_gif_creation)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setContentTitle(getString(R.string.gif_creating_notification, displayName))
                 .setProgress(0, 0, true)
                 .setOngoing(true)
                 .build();
     }
 
-    private void showCompletionNotification(final String displayName,
-                                            final Uri contentUri) {
-        final String mimeType = displayName.endsWith(".webp") ? "image/webp" : "image/gif";
-        final Intent viewIntent = new Intent(Intent.ACTION_VIEW);
-        viewIntent.setDataAndType(contentUri, mimeType);
-        viewIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
+    private void showCompletionNotification(final String displayName) {
+        final Intent openDownloads = new Intent(this, DownloadActivity.class);
         final PendingIntent pendingIntent = PendingIntent.getActivity(
-                this, 0, viewIntent,
+                this, 0, openDownloads,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
         final Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_gif_creation)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentTitle(getString(R.string.gif_saved_notification, displayName))
                 .setContentText(getString(R.string.gif_saved_to_downloads))
                 .setContentIntent(pendingIntent)
@@ -217,7 +216,7 @@ public class GifCreationService extends Service {
         final String errorMsg = e.getMessage() != null ? e.getMessage()
                 : e.getClass().getSimpleName();
         final Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_gif_creation)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
                 .setContentTitle(getString(R.string.gif_creation_failed, displayName))
                 .setContentText(errorMsg)
                 .setStyle(new NotificationCompat.BigTextStyle()

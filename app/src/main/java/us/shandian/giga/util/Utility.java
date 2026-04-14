@@ -37,6 +37,8 @@ public class Utility {
         VIDEO,
         MUSIC,
         SUBTITLE,
+        IMAGE,
+        WEBP,
         UNKNOWN
     }
 
@@ -122,6 +124,10 @@ public class Utility {
                 return FileType.MUSIC;
             case 's':
                 return FileType.SUBTITLE;
+            case 'w':
+                return FileType.WEBP;
+            case 'g':
+                return FileType.IMAGE;
             //default '?':
         }
 
@@ -130,8 +136,12 @@ public class Utility {
         } else if (file.endsWith(".mp3") || file.endsWith(".wav") || file.endsWith(".flac") || file.endsWith(".m4a") || file.endsWith(".opus")) {
             return FileType.MUSIC;
         } else if (file.endsWith(".mp4") || file.endsWith(".mpeg") || file.endsWith(".rm") || file.endsWith(".rmvb")
-                || file.endsWith(".flv") || file.endsWith(".webp") || file.endsWith(".webm")) {
+                || file.endsWith(".flv") || file.endsWith(".webm")) {
             return FileType.VIDEO;
+        } else if (file.endsWith(".webp")) {
+            return FileType.WEBP;
+        } else if (file.endsWith(".gif")) {
+            return FileType.IMAGE;
         }
 
         return FileType.UNKNOWN;
@@ -149,6 +159,9 @@ public class Utility {
                 break;
             case SUBTITLE:
                 colorRes = R.color.subtitle_left_to_load_color;
+                break;
+            case WEBP:
+                colorRes = R.color.webp_left_to_load_color;
                 break;
             default:
                 colorRes = R.color.gray;
@@ -170,6 +183,9 @@ public class Utility {
             case SUBTITLE:
                 colorRes = R.color.subtitle_already_load_color;
                 break;
+            case WEBP:
+                colorRes = R.color.webp_already_load_color;
+                break;
             default:
                 colorRes = R.color.gray;
                 break;
@@ -183,11 +199,15 @@ public class Utility {
         switch (type) {
             case MUSIC:
                 return R.drawable.ic_headset;
+            case IMAGE:
+                return R.drawable.ic_gif_creation;
+            case WEBP:
+                return R.drawable.ic_webp_creation;
+            case SUBTITLE:
+                return R.drawable.ic_subtitles;
             default:
             case VIDEO:
                 return R.drawable.ic_movie;
-            case SUBTITLE:
-                return R.drawable.ic_subtitles;
         }
     }
 
