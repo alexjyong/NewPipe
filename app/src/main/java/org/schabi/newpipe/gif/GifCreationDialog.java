@@ -14,10 +14,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.RadioGroup;
-import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResult;
@@ -30,7 +28,9 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.PreferenceManager;
 
-import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.button.MaterialButtonToggleGroup;
+import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.slider.RangeSlider;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
@@ -61,12 +61,13 @@ public class GifCreationDialog extends DialogFragment {
     private long currentPositionMs;
 
     private EditText fileNameEdit;
-    private TextInputEditText startTimeEdit;
-    private TextInputEditText endTimeEdit;
-    private SeekBar startTimeSeekbar;
-    private SeekBar endTimeSeekbar;
-    private RadioGroup formatGroup;
-    private CheckBox optimizeCheckbox;
+    private EditText startTimeEdit;
+    private EditText endTimeEdit;
+    private RangeSlider timeRangeSlider;
+    private TextView clipDurationText;
+    private TextView clipDurationWarning;
+    private MaterialButtonToggleGroup formatGroup;
+    private MaterialSwitch optimizeCheckbox;
 
     private int durationSeconds;
     private boolean updatingFromText = false;
@@ -116,60 +117,39 @@ public class GifCreationDialog extends DialogFragment {
         fileNameEdit = view.findViewById(R.id.file_name);
         startTimeEdit = view.findViewById(R.id.start_time_edit);
         endTimeEdit = view.findViewById(R.id.end_time_edit);
-        startTimeSeekbar = view.findViewById(R.id.start_time_seekbar);
-        endTimeSeekbar = view.findViewById(R.id.end_time_seekbar);
+        timeRangeSlider = view.findViewById(R.id.time_range_slider);
+        clipDurationText = view.findViewById(R.id.clip_duration_text);
+        clipDurationWarning = view.findViewById(R.id.clip_duration_warning);
         formatGroup = view.findViewById(R.id.format_group);
         optimizeCheckbox = view.findViewById(R.id.optimize_checkbox);
 
-        startTimeSeekbar.setMax(durationSeconds);
-        endTimeSeekbar.setMax(durationSeconds);
-
         final int startSec = (int) (currentPositionMs / 1000);
         final int endSec = Math.min(startSec + DEFAULT_CLIP_SECONDS, durationSeconds);
-        startTimeSeekbar.setProgress(startSec);
-        endTimeSeekbar.setProgress(endSec);
+
+        timeRangeSlider.setValueFrom(0f);
+        timeRangeSlider.setValueTo(Math.max(durationSeconds, 1));
+        timeRangeSlider.setMinSeparationValue(1f);
+        timeRangeSlider.setValues((float) startSec, (float) endSec);
+        timeRangeSlider.setLabelFormatter(value -> formatTime((int) value));
+
+        timeRangeSlider.addOnChangeListener((slider, value, fromUser) -> {
+            setTimeTexts();
+            updateFileName();
+            updateDuration();
+        });
 
         setTimeTexts();
         updateFileName();
-
-        final SeekBar.OnSeekBarChangeListener seekListener =
-                new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(final SeekBar seekBar, final int progress,
-                                          final boolean fromUser) {
-                if (fromUser) {
-                    if (seekBar == startTimeSeekbar
-                            && progress >= endTimeSeekbar.getProgress()) {
-                        startTimeSeekbar.setProgress(
-                                Math.max(0, endTimeSeekbar.getProgress() - 1));
-                        return;
-                    }
-                    if (seekBar == endTimeSeekbar
-                            && progress <= startTimeSeekbar.getProgress()) {
-                        endTimeSeekbar.setProgress(
-                                Math.min(durationSeconds,
-                                        startTimeSeekbar.getProgress() + 1));
-                        return;
-                    }
-                }
-                setTimeTexts();
-                updateFileName();
-            }
-
-            @Override
-            public void onStartTrackingTouch(final SeekBar seekBar) { }
-
-            @Override
-            public void onStopTrackingTouch(final SeekBar seekBar) { }
-        };
-
-        startTimeSeekbar.setOnSeekBarChangeListener(seekListener);
-        endTimeSeekbar.setOnSeekBarChangeListener(seekListener);
+        updateDuration();
 
         setupTimeTextField(startTimeEdit, true);
         setupTimeTextField(endTimeEdit, false);
 
-        formatGroup.setOnCheckedChangeListener((group, checkedId) -> updateFileName());
+        formatGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (isChecked) {
+                updateFileName();
+            }
+        });
 
         final Button addTextButton = view.findViewById(R.id.add_text_button);
         addTextButton.setOnClickListener(v ->
@@ -180,7 +160,15 @@ public class GifCreationDialog extends DialogFragment {
         initToolbar(view);
     }
 
-    private void setupTimeTextField(final TextInputEditText field,
+    private int getStartSec() {
+        return timeRangeSlider.getValues().get(0).intValue();
+    }
+
+    private int getEndSec() {
+        return timeRangeSlider.getValues().get(1).intValue();
+    }
+
+    private void setupTimeTextField(final EditText field,
                                     final boolean isStart) {
         field.addTextChangedListener(new TextWatcher() {
             @Override
@@ -202,9 +190,7 @@ public class GifCreationDialog extends DialogFragment {
                     return;
                 }
                 final int clamped = Math.max(0, Math.min(durationSeconds, secs));
-                final int otherProgress = isStart
-                        ? endTimeSeekbar.getProgress()
-                        : startTimeSeekbar.getProgress();
+                final int otherProgress = isStart ? getEndSec() : getStartSec();
 
                 if (isStart && clamped >= otherProgress) {
                     return;
@@ -215,12 +201,13 @@ public class GifCreationDialog extends DialogFragment {
 
                 updatingFromText = true;
                 if (isStart) {
-                    startTimeSeekbar.setProgress(clamped);
+                    timeRangeSlider.setValues((float) clamped, (float) getEndSec());
                 } else {
-                    endTimeSeekbar.setProgress(clamped);
+                    timeRangeSlider.setValues((float) getStartSec(), (float) clamped);
                 }
                 updatingFromText = false;
                 updateFileName();
+                updateDuration();
             }
         });
     }
@@ -229,8 +216,15 @@ public class GifCreationDialog extends DialogFragment {
         if (updatingFromText) {
             return;
         }
-        startTimeEdit.setText(formatTime(startTimeSeekbar.getProgress()));
-        endTimeEdit.setText(formatTime(endTimeSeekbar.getProgress()));
+        startTimeEdit.setText(formatTime(getStartSec()));
+        endTimeEdit.setText(formatTime(getEndSec()));
+    }
+
+    private void updateDuration() {
+        final int duration = getEndSec() - getStartSec();
+        clipDurationText.setText(getString(R.string.gif_clip_duration, duration));
+        clipDurationWarning.setVisibility(
+                duration > WARN_CLIP_SECONDS ? View.VISIBLE : View.GONE);
     }
 
     private static Integer parseTime(final String s) {
@@ -275,8 +269,8 @@ public class GifCreationDialog extends DialogFragment {
     }
 
     private void startGifCreation() {
-        final int startSec = startTimeSeekbar.getProgress();
-        final int endSec = endTimeSeekbar.getProgress();
+        final int startSec = getStartSec();
+        final int endSec = getEndSec();
         final int clipDuration = endSec - startSec;
 
         if (clipDuration < 1) {
@@ -284,12 +278,6 @@ public class GifCreationDialog extends DialogFragment {
                     R.string.gif_time_range_error,
                     Toast.LENGTH_SHORT).show();
             return;
-        }
-
-        if (clipDuration > WARN_CLIP_SECONDS) {
-            Toast.makeText(requireContext(),
-                    R.string.gif_long_clip_warning,
-                    Toast.LENGTH_LONG).show();
         }
 
         final String streamUrl = getVideoStreamUrl();
@@ -300,7 +288,7 @@ public class GifCreationDialog extends DialogFragment {
             return;
         }
 
-        final boolean isGif = formatGroup.getCheckedRadioButtonId() == R.id.format_gif;
+        final boolean isGif = formatGroup.getCheckedButtonId() == R.id.format_gif;
         final String format = isGif ? "gif" : "webp";
         final boolean optimize = optimizeCheckbox.isChecked();
         final String fileName = fileNameEdit.getText().toString().trim();
@@ -414,9 +402,9 @@ public class GifCreationDialog extends DialogFragment {
     }
 
     private void updateFileName() {
-        final int startSec = startTimeSeekbar.getProgress();
-        final int endSec = endTimeSeekbar.getProgress();
-        final boolean isGif = formatGroup.getCheckedRadioButtonId() == R.id.format_gif;
+        final int startSec = getStartSec();
+        final int endSec = getEndSec();
+        final boolean isGif = formatGroup.getCheckedButtonId() == R.id.format_gif;
         final String ext = isGif ? "gif" : "webp";
         final String title = streamInfo.getName()
                 .replaceAll("[^a-zA-Z0-9._-]", "_");

@@ -1,4 +1,5 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -42,6 +43,17 @@
                 android:gravity="center"
                 android:text="@string/clip_time_range" />
 
+            <com.google.android.material.slider.RangeSlider
+                android:id="@+id/time_range_slider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="0dp"
+                android:stepSize="1"
+                android:valueFrom="0"
+                android:valueTo="3600"
+                app:labelBehavior="floating"
+                app:trackHeight="4dp" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -49,76 +61,78 @@
                 android:baselineAligned="false"
                 android:orientation="horizontal">
 
-                <com.google.android.material.textfield.TextInputLayout
+                <org.schabi.newpipe.views.NewPipeEditText
+                    android:id="@+id/start_time_edit"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="4dp"
                     android:layout_weight="1"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    android:gravity="center"
+                    android:inputType="time"
+                    android:maxLines="1" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/start_time_edit"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:inputType="time"
-                        android:maxLines="1" />
-                </com.google.android.material.textfield.TextInputLayout>
+                <org.schabi.newpipe.views.NewPipeTextView
+                    android:id="@+id/clip_duration_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:gravity="center"
+                    tools:text="5s" />
 
-                <com.google.android.material.textfield.TextInputLayout
+                <org.schabi.newpipe.views.NewPipeEditText
+                    android:id="@+id/end_time_edit"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:layout_weight="1"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    android:gravity="center"
+                    android:inputType="time"
+                    android:maxLines="1" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/end_time_edit"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:inputType="time"
-                        android:maxLines="1" />
-                </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
-            <SeekBar
-                android:id="@+id/start_time_seekbar"
+            <org.schabi.newpipe.views.NewPipeTextView
+                android:id="@+id/clip_duration_warning"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
+                android:layout_marginBottom="4dp"
+                android:gravity="center"
+                android:text="@string/gif_long_clip_warning"
+                android:textColor="?attr/colorError"
+                android:visibility="gone"
+                tools:visibility="visible" />
 
-            <SeekBar
-                android:id="@+id/end_time_seekbar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp" />
-
-            <RadioGroup
+            <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/format_group"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:orientation="horizontal"
+                app:checkedButton="@id/format_gif"
+                app:selectionRequired="true"
+                app:singleSelection="true"
                 tools:ignore="RtlHardcoded">
 
-                <RadioButton
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/format_gif"
+                    style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:checked="true"
                     android:text="@string/gif_format_gif" />
 
-                <RadioButton
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/format_webp"
+                    style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/gif_format_webp" />
-            </RadioGroup>
 
-            <CheckBox
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/optimize_checkbox"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
                 android:checked="true"

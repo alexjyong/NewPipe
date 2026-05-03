@@ -919,6 +919,7 @@
     <string name="gif_optimize">Optimize file size</string>
     <string name="gif_add_text">Add Text</string>
     <string name="gif_add_text_stub_toast">Text overlay coming in a future update</string>
+    <string name="gif_clip_duration">%ds</string>
     <string name="gif_time_range_error">Clip must be at least 1 second</string>
     <string name="gif_long_clip_warning">Long clips may produce large files</string>
     <string name="gif_creating_notification">Creating %s\u2026</string>

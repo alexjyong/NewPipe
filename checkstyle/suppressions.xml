@@ -5,6 +5,10 @@
 <suppressions>
   <!-- Use @SuppressWarnings("...") if it is possible, only use this file if it is not -->
 
+  <!-- Vendored third-party source; do not apply project style rules -->
+  <suppress checks=".*"
+    files="io[\\/]nickolasbailey[\\/]animatedgifencoder[\\/]AnimatedGifEncoder\.java"/>
+
   <suppress checks="FileLength"
     files="Player.java"/>
 
