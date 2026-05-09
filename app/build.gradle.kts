@@ -24,8 +24,13 @@ val gitWorkingBranch = providers.exec {
     commandLine("git", "rev-parse", "--abbrev-ref", "HEAD")
 }.standardOutput.asText.map { it.trim() }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 kotlin {
-    jvmToolchain(21)
     compilerOptions {
         // TODO: Drop annotation default target when it is stable
         freeCompilerArgs.addAll(
@@ -137,6 +142,13 @@ ksp {
 // Custom dependency configuration for ktlint
 val ktlint by configurations.creating
 
+// https://checkstyle.org/#JRE_and_JDK
+tasks.withType<Checkstyle>().configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 checkstyle {
     configDirectory = rootProject.file("checkstyle")
     isIgnoreFailures = false
@@ -208,6 +220,7 @@ aboutLibraries {
     // note: offline mode prevents the plugin from fetching licenses at build time, which would be
     // harmful for reproducible builds
     offlineMode = true
+    duplicationMode = DuplicateMode.MERGE
 }
 
 dependencies {
@@ -312,7 +325,6 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-
 
     // Markdown library for Android
     implementation(libs.noties.markwon.core)
