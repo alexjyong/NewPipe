@@ -130,7 +130,7 @@
 
             </com.google.android.material.button.MaterialButtonToggleGroup>
 
-            <com.google.android.material.materialswitch.MaterialSwitch
+            <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/optimize_checkbox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

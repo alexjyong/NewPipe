@@ -29,7 +29,7 @@ import androidx.fragment.app.DialogFragment;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.button.MaterialButtonToggleGroup;
-import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.slider.RangeSlider;
 
 import org.schabi.newpipe.R;
@@ -67,7 +67,7 @@ public class GifCreationDialog extends DialogFragment {
     private TextView clipDurationText;
     private TextView clipDurationWarning;
     private MaterialButtonToggleGroup formatGroup;
-    private MaterialSwitch optimizeCheckbox;
+    private SwitchMaterial optimizeCheckbox;
 
     private int durationSeconds;
     private boolean updatingFromText = false;
@@ -123,11 +123,13 @@ public class GifCreationDialog extends DialogFragment {
         formatGroup = view.findViewById(R.id.format_group);
         optimizeCheckbox = view.findViewById(R.id.optimize_checkbox);
 
-        final int startSec = (int) (currentPositionMs / 1000);
-        final int endSec = Math.min(startSec + DEFAULT_CLIP_SECONDS, durationSeconds);
+        final int maxDuration = Math.max(durationSeconds, 1);
+        // clamp start so there is always room for at least 1 second after it
+        final int startSec = Math.min((int) (currentPositionMs / 1000), maxDuration - 1);
+        final int endSec = Math.min(startSec + DEFAULT_CLIP_SECONDS, maxDuration);
 
         timeRangeSlider.setValueFrom(0f);
-        timeRangeSlider.setValueTo(Math.max(durationSeconds, 1));
+        timeRangeSlider.setValueTo(maxDuration);
         timeRangeSlider.setMinSeparationValue(1f);
         timeRangeSlider.setValues((float) startSec, (float) endSec);
         timeRangeSlider.setLabelFormatter(value -> formatTime((int) value));
