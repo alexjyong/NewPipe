@@ -68,6 +68,7 @@ public class GifCreationDialog extends DialogFragment {
     private TextView clipDurationWarning;
     private MaterialButtonToggleGroup formatGroup;
     private SwitchMaterial optimizeCheckbox;
+    private Toolbar toolbar;
 
     private int durationSeconds;
     private boolean updatingFromText = false;
@@ -150,6 +151,7 @@ public class GifCreationDialog extends DialogFragment {
         formatGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (isChecked) {
                 updateFileName();
+                updateToolbarTitle();
             }
         });
 
@@ -252,10 +254,14 @@ public class GifCreationDialog extends DialogFragment {
         }
     }
 
+    private void updateToolbarTitle() {
+        final boolean isGif = formatGroup.getCheckedButtonId() == R.id.format_gif;
+        toolbar.setTitle(isGif ? R.string.gif_creation_title : R.string.webp_creation_title);
+    }
+
     private void initToolbar(final View view) {
-        final Toolbar toolbar = view.findViewById(R.id.toolbar_layout)
-                .findViewById(R.id.toolbar);
-        toolbar.setTitle(R.string.gif_creation_title);
+        toolbar = view.findViewById(R.id.toolbar_layout).findViewById(R.id.toolbar);
+        updateToolbarTitle();
         toolbar.setNavigationIcon(R.drawable.ic_arrow_back);
         toolbar.inflateMenu(R.menu.gif_creation_toolbar);
         toolbar.setNavigationOnClickListener(v -> dismiss());
@@ -325,7 +331,7 @@ public class GifCreationDialog extends DialogFragment {
                 if (file != null) {
                     intent.putExtra(GifCreationService.EXTRA_OUTPUT_URI,
                             file.getUri().toString());
-                    launchService(intent);
+                    launchService(intent, isGif);
                     return;
                 }
             } catch (final Exception e) {
@@ -372,13 +378,15 @@ public class GifCreationDialog extends DialogFragment {
         }
 
         pendingServiceIntent.putExtra(GifCreationService.EXTRA_OUTPUT_URI, uri.toString());
-        launchService(pendingServiceIntent);
+        final boolean isGif = "gif".equals(
+                pendingServiceIntent.getStringExtra(GifCreationService.EXTRA_FORMAT));
+        launchService(pendingServiceIntent, isGif);
     }
 
-    private void launchService(final Intent intent) {
+    private void launchService(final Intent intent, final boolean isGif) {
         ContextCompat.startForegroundService(requireContext(), intent);
         Toast.makeText(requireContext(),
-                R.string.gif_creation_started,
+                isGif ? R.string.gif_creation_started : R.string.webp_creation_started,
                 Toast.LENGTH_SHORT).show();
         dismiss();
     }
