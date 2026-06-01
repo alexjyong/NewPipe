@@ -2,8 +2,6 @@
  * SPDX-FileCopyrightText: 2025 NewPipe e.V. <https://newpipe-ev.de>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
-import com.mikepenz.aboutlibraries.plugin.DuplicateMode
-
 import com.android.build.api.dsl.ApplicationExtension
 
 plugins {
@@ -26,7 +24,7 @@ val gitWorkingBranch = providers.exec {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -220,7 +218,6 @@ aboutLibraries {
     // note: offline mode prevents the plugin from fetching licenses at build time, which would be
     // harmful for reproducible builds
     offlineMode = true
-    duplicationMode = DuplicateMode.MERGE
 }
 
 dependencies {

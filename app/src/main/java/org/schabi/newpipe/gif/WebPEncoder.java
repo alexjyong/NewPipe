@@ -12,21 +12,16 @@ import java.util.List;
  * Animated WebP encoder. Compresses individual frames via Bitmap.compress,
  * then parses out the VP8/VP8L bitstream chunks and assembles them into
  * a RIFF-based animated WebP container per the WebP spec.
- *
- * optimize=true uses lossy VP8 at quality 75.
- * optimize=false uses lossless VP8L at quality 100.
  */
 @SuppressWarnings("deprecation")
 public final class WebPEncoder {
 
     private static final int LOSSY_QUALITY = 75;
-    private static final int LOSSLESS_QUALITY = 100;
 
     private WebPEncoder() {
     }
 
-    public static byte[] encode(final List<Bitmap> frames,
-                                final boolean optimize) throws IOException {
+    public static byte[] encode(final List<Bitmap> frames) throws IOException {
         if (frames.isEmpty()) {
             throw new IllegalArgumentException("No frames to encode");
         }
@@ -34,8 +29,7 @@ public final class WebPEncoder {
         final int width = frames.get(0).getWidth();
         final int height = frames.get(0).getHeight();
         final int frameDurationMs = 67; // 15 fps
-        final int quality = optimize ? LOSSY_QUALITY : LOSSLESS_QUALITY;
-        final Bitmap.CompressFormat format = pickFormat(optimize);
+        final Bitmap.CompressFormat format = pickFormat();
 
         final ByteArrayOutputStream riff = new ByteArrayOutputStream();
 
@@ -54,7 +48,7 @@ public final class WebPEncoder {
         writeLe16(riff, 0); // loop count 0 = infinite
 
         for (final Bitmap frame : frames) {
-            final byte[] framePayload = extractFramePayload(frame, format, quality);
+            final byte[] framePayload = extractFramePayload(frame, format, LOSSY_QUALITY);
 
             final int anmfDataSize = 16 + framePayload.length;
             writeChunkHeader(riff, "ANMF", anmfDataSize);
@@ -117,11 +111,9 @@ public final class WebPEncoder {
         return payload.toByteArray();
     }
 
-    private static Bitmap.CompressFormat pickFormat(final boolean optimize) {
+    private static Bitmap.CompressFormat pickFormat() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return optimize
-                    ? Bitmap.CompressFormat.WEBP_LOSSY
-                    : Bitmap.CompressFormat.WEBP_LOSSLESS;
+            return Bitmap.CompressFormat.WEBP_LOSSY;
         }
         return Bitmap.CompressFormat.WEBP;
     }

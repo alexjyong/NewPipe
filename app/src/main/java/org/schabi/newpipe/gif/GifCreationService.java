@@ -39,7 +39,6 @@ public class GifCreationService extends Service {
     public static final String EXTRA_START_MS = "start_ms";
     public static final String EXTRA_END_MS = "end_ms";
     public static final String EXTRA_FORMAT = "format";
-    public static final String EXTRA_OPTIMIZE = "optimize";
     public static final String EXTRA_FILE_NAME = "file_name";
     public static final String EXTRA_VIDEO_TITLE = "video_title";
     public static final String EXTRA_OUTPUT_URI = "output_uri";
@@ -65,7 +64,6 @@ public class GifCreationService extends Service {
         final long startMs = intent.getLongExtra(EXTRA_START_MS, 0);
         final long endMs = intent.getLongExtra(EXTRA_END_MS, 0);
         final String format = intent.getStringExtra(EXTRA_FORMAT);
-        final boolean optimize = intent.getBooleanExtra(EXTRA_OPTIMIZE, true);
         final String videoTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE);
         final String outputUri = intent.getStringExtra(EXTRA_OUTPUT_URI);
 
@@ -76,7 +74,7 @@ public class GifCreationService extends Service {
         new Thread(() -> {
             try {
                 processGifCreation(streamUrl, startMs, endMs, format,
-                        optimize, displayName, outputUri);
+                        displayName, outputUri);
             } catch (final Exception e) {
                 Log.e(TAG, "GIF creation failed", e);
                 showErrorNotification(displayName, e);
@@ -91,7 +89,6 @@ public class GifCreationService extends Service {
 
     private void processGifCreation(final String streamUrl, final long startMs,
                                     final long endMs, final String format,
-                                    final boolean optimize,
                                     final String displayName,
                                     final String outputUri) throws Exception {
         final boolean isGif = "gif".equals(format);
@@ -108,9 +105,9 @@ public class GifCreationService extends Service {
 
         final byte[] encoded;
         if (isGif) {
-            encoded = GifEncoder.encode(processedFrames, optimize);
+            encoded = GifEncoder.encode(processedFrames);
         } else {
-            encoded = WebPEncoder.encode(processedFrames, optimize);
+            encoded = WebPEncoder.encode(processedFrames);
         }
 
         final String mimeType = isGif ? "image/gif" : "image/webp";

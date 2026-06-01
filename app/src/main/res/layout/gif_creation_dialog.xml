@@ -48,7 +48,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="0dp"
-                android:stepSize="1"
+                android:stepSize="0.1"
                 android:valueFrom="0"
                 android:valueTo="3600"
                 app:labelBehavior="floating"
@@ -68,7 +68,7 @@
                     android:layout_marginEnd="4dp"
                     android:layout_weight="1"
                     android:gravity="center"
-                    android:inputType="time"
+                    android:inputType="text"
                     android:maxLines="1" />
 
                 <org.schabi.newpipe.views.NewPipeTextView
@@ -88,7 +88,7 @@
                     android:layout_marginStart="4dp"
                     android:layout_weight="1"
                     android:gravity="center"
-                    android:inputType="time"
+                    android:inputType="text"
                     android:maxLines="1" />
 
             </LinearLayout>
@@ -129,14 +129,6 @@
                     android:text="@string/gif_format_webp" />
 
             </com.google.android.material.button.MaterialButtonToggleGroup>
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/optimize_checkbox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:checked="true"
-                android:text="@string/gif_optimize" />
 
             <Button
                 android:id="@+id/add_text_button"

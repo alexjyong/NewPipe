@@ -15,8 +15,7 @@ public final class GifEncoder {
     private GifEncoder() {
     }
 
-    public static byte[] encode(final List<Bitmap> frames,
-                                final boolean optimize) {
+    public static byte[] encode(final List<Bitmap> frames) {
         if (frames.isEmpty()) {
             throw new IllegalArgumentException("No frames to encode");
         }
@@ -27,7 +26,7 @@ public final class GifEncoder {
         encoder.start(out);
         encoder.setDelay(DELAY_MS);
         encoder.setRepeat(0);
-        encoder.setQuality(optimize ? 1 : 10);
+        encoder.setQuality(1);
 
         for (final Bitmap frame : frames) {
             encoder.addFrame(frame);
