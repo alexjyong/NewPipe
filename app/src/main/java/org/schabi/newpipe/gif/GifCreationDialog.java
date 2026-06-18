@@ -122,8 +122,10 @@ public class GifCreationDialog extends DialogFragment {
         formatGroup = view.findViewById(R.id.format_group);
 
         final int maxDuration = Math.max(durationSeconds, 1);
-        // clamp start so there is always room for at least 0.1s after it
-        final float startSec = Math.min(currentPositionMs / 1000f, maxDuration - 0.1f);
+        // clamp start so there is always room for at least 0.1s after it, then round to the
+        // slider's stepSize of 0.1 to avoid IllegalStateException on non-multiple values
+        final float startSec = Math.round(
+                Math.min(currentPositionMs / 1000f, maxDuration - 0.1f) * 10f) / 10f;
         final float endSec = Math.min(startSec + DEFAULT_CLIP_SECONDS, maxDuration);
 
         timeRangeSlider.setValueFrom(0f);
@@ -189,7 +191,8 @@ public class GifCreationDialog extends DialogFragment {
                 if (secs == null) {
                     return;
                 }
-                final float clamped = Math.max(0f, Math.min(durationSeconds, secs));
+                final float clamped = Math.round(
+                        Math.max(0f, Math.min(durationSeconds, secs)) * 10f) / 10f;
                 final float otherProgress = isStart ? getEndSec() : getStartSec();
 
                 if (isStart && clamped >= otherProgress) {
