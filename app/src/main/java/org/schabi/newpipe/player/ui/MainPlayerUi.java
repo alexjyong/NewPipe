@@ -47,11 +47,11 @@ import com.google.android.exoplayer2.video.VideoSize;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.PlayerBinding;
+import org.schabi.newpipe.download.DownloadDialog;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
 import org.schabi.newpipe.fragments.OnScrollBelowItemsListener;
 import org.schabi.newpipe.fragments.detail.VideoDetailFragment;
-import org.schabi.newpipe.gif.GifCreationDialog;
 import org.schabi.newpipe.info_list.StreamSegmentAdapter;
 import org.schabi.newpipe.info_list.StreamSegmentItem;
 import org.schabi.newpipe.ktx.AnimationType;
@@ -179,10 +179,10 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
                     final long positionMs = player.getExoPlayer() != null
                             ? player.getExoPlayer().getCurrentPosition() : 0;
                     getParentActivity().ifPresent(activity -> {
-                        final GifCreationDialog dialog =
-                                new GifCreationDialog(activity, info, positionMs);
-                        dialog.show(activity.getSupportFragmentManager(),
-                                "gifCreationDialog");
+                        // shortcut into the download dialog's GIF/WebP tab
+                        final DownloadDialog dialog =
+                                new DownloadDialog(activity, info, positionMs, true);
+                        dialog.show(activity.getSupportFragmentManager(), "downloadDialog");
                     });
                 })));
 

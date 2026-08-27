@@ -429,6 +429,7 @@
     <string name="last_download_type_video_key">last_dl_type_video</string>
     <string name="last_download_type_audio_key">last_dl_type_audio</string>
     <string name="last_download_type_subtitle_key">last_dl_type_subtitle</string>
+    <string name="last_download_type_gif_key">last_dl_type_gif</string>
 
     <string name="downloads_storage_ask">downloads_storage_ask</string>
     <string name="storage_use_saf">storage_use_saf</string>

@@ -922,6 +922,7 @@
     <string name="kao_solution">Solution</string>
     <string name="gif_creation">Create GIF/WebP</string>
     <string name="gif_creation_title">Create GIF/WebP</string>
+    <string name="download_type_gif">GIF/WebP</string>
     <string name="gif_format_gif">GIF</string>
     <string name="gif_format_webp">WebP</string>
     <string name="gif_add_text">Add Text</string>
@@ -935,7 +936,6 @@
     <string name="gif_creation_failed">Failed to create %s</string>
     <string name="gif_creation_started">GIF creation started in background</string>
     <string name="webp_creation_started">WebP creation started in background</string>
-    <string name="create_gif">Create GIF/WebP</string>
     <string name="gif_start_time">Start</string>
     <string name="gif_end_time">End</string>
     <string name="clip_time_range">Time Range</string>

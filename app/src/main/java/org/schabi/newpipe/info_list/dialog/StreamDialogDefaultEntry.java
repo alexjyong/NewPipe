@@ -17,7 +17,6 @@ import org.schabi.newpipe.download.DownloadDialog;
 import org.schabi.newpipe.error.ErrorInfo;
 import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.error.UserAction;
-import org.schabi.newpipe.gif.GifCreationDialog;
 import org.schabi.newpipe.local.dialog.PlaylistAppendDialog;
 import org.schabi.newpipe.local.dialog.PlaylistDialog;
 import org.schabi.newpipe.local.history.HistoryRecordManager;
@@ -156,17 +155,6 @@ public enum StreamDialogDefaultEntry {
                 .onErrorComplete()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe()
-    ),
-
-    CREATE_GIF(R.string.create_gif, (fragment, item) ->
-            fetchStreamInfoAndSaveToDatabase(fragment.requireContext(), item.getServiceId(),
-                    item.getUrl(), info -> {
-                        if (fragment.isAdded() && !fragment.isStateSaved()) {
-                            final GifCreationDialog dialog =
-                                    new GifCreationDialog(fragment.requireContext(), info, 0);
-                            dialog.show(fragment.getParentFragmentManager(), "gifCreationDialog");
-                        }
-                    })
     );
 
 
