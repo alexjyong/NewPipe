@@ -366,6 +366,7 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.audioStreamSpinner.setOnItemSelectedListener(this);
         dialogBinding.audioTrackSpinner.setOnItemSelectedListener(this);
         dialogBinding.videoAudioGroup.setOnCheckedChangeListener(this);
+        dialogBinding.gifGroup.setOnCheckedChangeListener(this);
 
         initToolbar(dialogBinding.toolbarLayout.toolbar);
         initClipPanel();
@@ -441,8 +442,7 @@ public class DownloadDialog extends DialogFragment
         disposables.clear();
         disposables.add(StreamInfoWrapper.fetchMoreInfoForWrapper(wrappedVideoStreams)
                 .subscribe(result -> {
-                    if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId()
-                            == R.id.video_button) {
+                    if (getCheckedTypeButtonId() == R.id.video_button) {
                         setupVideoSpinner();
                     }
                 }, throwable -> ErrorUtil.showSnackbar(context,
@@ -450,8 +450,7 @@ public class DownloadDialog extends DialogFragment
                                 "Downloading video stream size", currentInfo))));
         disposables.add(StreamInfoWrapper.fetchMoreInfoForWrapper(getWrappedAudioStreams())
                 .subscribe(result -> {
-                    if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId()
-                            == R.id.audio_button) {
+                    if (getCheckedTypeButtonId() == R.id.audio_button) {
                         setupAudioSpinner();
                     }
                 }, throwable -> ErrorUtil.showSnackbar(context,
@@ -459,8 +458,7 @@ public class DownloadDialog extends DialogFragment
                                 "Downloading audio stream size", currentInfo))));
         disposables.add(StreamInfoWrapper.fetchMoreInfoForWrapper(wrappedSubtitleStreams)
                 .subscribe(result -> {
-                    if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId()
-                            == R.id.subtitle_button) {
+                    if (getCheckedTypeButtonId() == R.id.subtitle_button) {
                         setupSubtitleSpinner();
                     }
                 }, throwable -> ErrorUtil.showSnackbar(context,
@@ -594,7 +592,7 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.timeRangeSlider.addOnChangeListener((slider, value, fromUser) -> {
             setClipTimeTexts();
             updateClipDuration();
-            if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+            if (getCheckedTypeButtonId() == R.id.gif_button) {
                 updateGifFileName();
             }
         });
@@ -649,7 +647,7 @@ public class DownloadDialog extends DialogFragment
                 }
                 updatingClipFromText = false;
                 updateClipDuration();
-                if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+                if (getCheckedTypeButtonId() == R.id.gif_button) {
                     updateGifFileName();
                 }
             }
@@ -791,12 +789,27 @@ public class DownloadDialog extends DialogFragment
     // Listeners
     //////////////////////////////////////////////////////////////////////////*/
 
+    private int getCheckedTypeButtonId() {
+        final int id = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+        return id != -1 ? id : dialogBinding.gifGroup.getCheckedRadioButtonId();
+    }
+
     @Override
     public void onCheckedChanged(final RadioGroup group, @IdRes final int checkedId) {
         if (DEBUG) {
             Log.d(TAG, "onCheckedChanged() called with: "
                     + "group = [" + group + "], checkedId = [" + checkedId + "]");
         }
+        if (checkedId == -1) {
+            // fired by clearCheck() when the other group takes over
+            return;
+        }
+        if (group == dialogBinding.gifGroup) {
+            dialogBinding.videoAudioGroup.clearCheck();
+        } else if (group == dialogBinding.videoAudioGroup) {
+            dialogBinding.gifGroup.clearCheck();
+        }
+
         boolean flag = true;
 
         if (checkedId == R.id.audio_button) {
@@ -827,8 +840,7 @@ public class DownloadDialog extends DialogFragment
 
         final int parentId = parent.getId();
         if (parentId == R.id.quality_spinner) {
-            final int checkedRadioButtonId = dialogBinding.videoAudioGroup
-                    .getCheckedRadioButtonId();
+            final int checkedRadioButtonId = getCheckedTypeButtonId();
             if (checkedRadioButtonId == R.id.video_button) {
                 selectedVideoIndex = position;
                 onVideoStreamSelected();
@@ -849,7 +861,7 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void onItemSelectedSetFileName() {
-        if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+        if (getCheckedTypeButtonId() == R.id.gif_button) {
             // the GIF tab owns the file name field, spinner events must not overwrite it
             return;
         }
@@ -864,8 +876,7 @@ public class DownloadDialog extends DialogFragment
                 || prevFileName.startsWith(getString(R.string.caption_file_name, fileName, ""))) {
             // only update the file name field if it was not edited by the user
 
-            final int radioButtonId = dialogBinding.videoAudioGroup
-                    .getCheckedRadioButtonId();
+            final int radioButtonId = getCheckedTypeButtonId();
             if (radioButtonId == R.id.audio_button || radioButtonId == R.id.video_button) {
                 if (!prevFileName.equals(fileName)) {
                     // since the user might have switched between audio and video, the correct
@@ -1014,7 +1025,7 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void prepareSelectedDownload() {
-        if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+        if (getCheckedTypeButtonId() == R.id.gif_button) {
             prepareGifCreation();
             return;
         }
@@ -1029,7 +1040,7 @@ public class DownloadDialog extends DialogFragment
 
         filenameTmp = getNameEditText().concat(".");
 
-        final int checkedRadioButtonId = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+        final int checkedRadioButtonId = getCheckedTypeButtonId();
         if (checkedRadioButtonId == R.id.audio_button) {
             selectedMediaType = getString(R.string.last_download_type_audio_key);
             mainStorage = mainStorageAudio;
@@ -1080,7 +1091,7 @@ public class DownloadDialog extends DialogFragment
             Toast.makeText(context, getString(R.string.no_dir_yet),
                     Toast.LENGTH_LONG).show();
 
-            if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.audio_button) {
+            if (getCheckedTypeButtonId() == R.id.audio_button) {
                 launchDirectoryPicker(requestDownloadPickAudioFolderLauncher);
             } else {
                 launchDirectoryPicker(requestDownloadPickVideoFolderLauncher);
@@ -1095,7 +1106,7 @@ public class DownloadDialog extends DialogFragment
                 initialPath = null;
             } else {
                 final File initialSavePath;
-                if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.audio_button) {
+                if (getCheckedTypeButtonId() == R.id.audio_button) {
                     initialSavePath = NewPipeSettings.getDir(Environment.DIRECTORY_MUSIC);
                 } else {
                     initialSavePath = NewPipeSettings.getDir(Environment.DIRECTORY_MOVIES);
@@ -1442,7 +1453,7 @@ public class DownloadDialog extends DialogFragment
         long nearLength = 0;
 
         // more download logic: select muxer, subtitle converter, etc.
-        final int checkedRadioButtonId = dialogBinding.videoAudioGroup.getCheckedRadioButtonId();
+        final int checkedRadioButtonId = getCheckedTypeButtonId();
         if (checkedRadioButtonId == R.id.audio_button) {
             kind = 'a';
             selectedStream = audioStreamsAdapter.getItem(selectedAudioIndex);
