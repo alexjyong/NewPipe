@@ -925,10 +925,10 @@
     <string name="download_type_gif">GIF/WebP</string>
     <string name="gif_format_gif">GIF</string>
     <string name="gif_format_webp">WebP</string>
-    <string name="gif_add_text">Add Text</string>
-    <string name="gif_add_text_stub_toast">Text overlay coming in a future update</string>
     <string name="gif_clip_duration">%.1fs</string>
     <string name="gif_time_range_error">Clip must be at least 0.1 seconds</string>
+    <string name="gif_clip_too_long">Clip too long for GIF/WebP</string>
+    <string name="gif_creation_busy">Already creating a GIF/WebP</string>
     <string name="gif_long_clip_warning">Long clips may produce large files</string>
     <string name="gif_creating_notification">Creating %s\u2026</string>
     <string name="gif_saved_notification">%s saved</string>

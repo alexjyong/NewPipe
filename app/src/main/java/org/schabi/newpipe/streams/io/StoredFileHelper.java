@@ -253,12 +253,14 @@ public class StoredFileHelper implements Serializable {
         boolean res = docFile.delete();
 
         if (!res) {
+            boolean docDeleted = false;
             try {
-                DocumentsContract.deleteDocument(context.getContentResolver(), docFile.getUri());
-                res = true;
+                docDeleted = DocumentsContract.deleteDocument(
+                        context.getContentResolver(), docFile.getUri());
             } catch (final Exception ex) {
                 Log.w(TAG, "Cannot delete SAF document via DocumentsContract", ex);
             }
+            res |= docDeleted;
         }
 
         try {

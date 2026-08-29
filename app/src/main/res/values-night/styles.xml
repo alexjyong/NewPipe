@@ -6,4 +6,12 @@
         <item name="android:navigationBarColor">@color/dark_youtube_primary_color</item>
     </style>
 
+    <style name="NewPipe.MaterialDialogOverlay" parent="Theme.MaterialComponents.DayNight.Dialog.Bridge">
+        <item name="colorPrimary">@color/dark_youtube_primary_color</item>
+        <item name="colorPrimaryDark">@color/dark_youtube_primary_color</item>
+        <item name="colorAccent">@color/dark_youtube_accent_color</item>
+        <item name="android:windowBackground">@color/dark_dialog_background_color</item>
+        <item name="windowBackground">@color/dark_dialog_background_color</item>
+    </style>
+
 </resources>

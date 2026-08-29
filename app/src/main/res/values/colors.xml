@@ -77,6 +77,8 @@
     <color name="subtitle_already_load_color">#005a71</color>
     <color name="webp_left_to_load_color">#6B8E6B</color>
     <color name="webp_already_load_color">#4A6B4A</color>
+    <color name="image_left_to_load_color">#8A6FA8</color>
+    <color name="image_already_load_color">#5F4B7A</color>
 
     <!-- GigaGet Component colors -->
     <color name="white">#FFFFFF</color>

@@ -1,34 +1,66 @@
 package org.schabi.newpipe.gif;
 
 import android.graphics.Bitmap;
+import android.graphics.Matrix;
 import android.media.Image;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.os.SystemClock;
+import android.util.Log;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 public final class FrameExtractor {
 
     private static final String TAG = FrameExtractor.class.getSimpleName();
+    private static final long DRAIN_DEADLINE_MS = 500;
 
     private FrameExtractor() {
     }
 
     /**
+     * Reads the coded video dimensions without decoding any frame.
+     *
      * @param videoUrl direct stream URL
-     * @param startMs  clip start in milliseconds
-     * @param endMs    clip end in milliseconds
-     * @param widthPx  target width; height derived from aspect ratio
-     * @param fps      frames per second to sample
-     * @return ordered list of ARGB_8888 Bitmaps
+     * @return {width, height} of the first video track
+     * @throws IOException if the stream cannot be opened or has no video track
+     */
+    public static int[] probeVideoDimensions(final String videoUrl) throws IOException {
+        final MediaExtractor extractor = new MediaExtractor();
+        try {
+            extractor.setDataSource(videoUrl);
+            final int trackIndex = selectVideoTrack(extractor);
+            if (trackIndex < 0) {
+                throw new IOException("No video track found in stream");
+            }
+            final MediaFormat format = extractor.getTrackFormat(trackIndex);
+            return new int[]{
+                    format.getInteger(MediaFormat.KEY_WIDTH),
+                    format.getInteger(MediaFormat.KEY_HEIGHT)
+            };
+        } finally {
+            extractor.release();
+        }
+    }
+
+    /**
+     * @param videoUrl   direct stream URL
+     * @param startMs    clip start in milliseconds
+     * @param endMs      clip end in milliseconds
+     * @param widthPx    target width; height derived from the aspect ratio of each frame
+     * @param fps        frames per second to sample
+     * @param stopSignal polled between frames; a true result stops extraction early
+     * @return ordered list of ARGB_8888 bitmaps
      */
     public static List<Bitmap> extract(final String videoUrl, final long startMs,
                                        final long endMs, final int widthPx,
-                                       final int fps) throws IOException {
+                                       final int fps,
+                                       final BooleanSupplier stopSignal) throws IOException {
         if (videoUrl == null || videoUrl.isEmpty()) {
             throw new IOException("Video URL is null or empty");
         }
@@ -36,6 +68,7 @@ public final class FrameExtractor {
         final List<Bitmap> frames = new ArrayList<>();
         final long frameDurationUs = 1_000_000L / fps;
         final MediaExtractor extractor = new MediaExtractor();
+        MediaCodec codec = null;
 
         try {
             extractor.setDataSource(videoUrl);
@@ -52,17 +85,9 @@ public final class FrameExtractor {
                 throw new IOException("Cannot determine video codec");
             }
 
-            final int videoWidth = format.getInteger(MediaFormat.KEY_WIDTH);
-            final int videoHeight = format.getInteger(MediaFormat.KEY_HEIGHT);
-            if (videoWidth <= 0 || videoHeight <= 0) {
-                throw new IOException("Invalid video dimensions: " + videoWidth
-                        + "x" + videoHeight);
-            }
+            int rotationDegrees = getIntegerOr(format, MediaFormat.KEY_ROTATION, 0);
 
-            final float scale = (float) widthPx / videoWidth;
-            final int targetHeight = Math.round(videoHeight * scale);
-
-            final MediaCodec codec = MediaCodec.createDecoderByType(mime);
+            codec = MediaCodec.createDecoderByType(mime);
             if (codec == null) {
                 throw new IOException("Codec not available for: " + mime);
             }
@@ -78,8 +103,10 @@ public final class FrameExtractor {
             boolean inputDone = false;
             long nextFrameTimeUs = startMs * 1000;
             final long endUs = endMs * 1000;
+            long drainDeadlineMs = 0L;
+            int nullImageFrames = 0;
 
-            while (true) {
+            while (!stopSignal.getAsBoolean()) {
                 if (!inputDone) {
                     final int inputIndex = codec.dequeueInputBuffer(10_000);
                     if (inputIndex >= 0) {
@@ -98,16 +125,20 @@ public final class FrameExtractor {
                 }
 
                 final int outputIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000);
-                if (outputIndex >= 0) {
+                if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    rotationDegrees = getIntegerOr(codec.getOutputFormat(),
+                            MediaFormat.KEY_ROTATION, rotationDegrees);
+                } else if (outputIndex >= 0) {
                     final long presentationTimeUs = bufferInfo.presentationTimeUs;
 
                     if (presentationTimeUs >= nextFrameTimeUs
                             && presentationTimeUs <= endUs) {
                         final Image image = codec.getOutputImage(outputIndex);
                         if (image != null) {
-                            final Bitmap bitmap = imageToBitmap(image, widthPx, targetHeight);
-                            frames.add(bitmap);
+                            frames.add(imageToBitmap(image, widthPx, rotationDegrees));
                             image.close();
+                        } else if (++nullImageFrames == 1) {
+                            Log.w(TAG, "Decoder returned a null image; skipping frame");
                         }
                         nextFrameTimeUs += frameDurationUs;
                     }
@@ -119,18 +150,37 @@ public final class FrameExtractor {
                     }
                 } else if (outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
                     if (inputDone) {
-                        break;
+                        if (drainDeadlineMs == 0L) {
+                            drainDeadlineMs = SystemClock.elapsedRealtime()
+                                    + DRAIN_DEADLINE_MS;
+                        } else if (SystemClock.elapsedRealtime() >= drainDeadlineMs) {
+                            break;
+                        }
                     }
                 }
             }
-
-            codec.stop();
-            codec.release();
         } finally {
+            if (codec != null) {
+                try {
+                    codec.stop();
+                } catch (final IllegalStateException e) {
+                    Log.w(TAG, "Codec was not in a stoppable state", e);
+                }
+                codec.release();
+            }
             extractor.release();
         }
 
         return frames;
+    }
+
+    private static int getIntegerOr(final MediaFormat format, final String key,
+                                    final int fallback) {
+        try {
+            return format.getInteger(key);
+        } catch (final Exception e) {
+            return fallback;
+        }
     }
 
     private static int selectVideoTrack(final MediaExtractor extractor) {
@@ -146,7 +196,7 @@ public final class FrameExtractor {
 
     private static Bitmap imageToBitmap(final Image image,
                                         final int targetWidth,
-                                        final int targetHeight) {
+                                        final int rotationDegrees) {
         final Image.Plane[] planes = image.getPlanes();
         final ByteBuffer yBuffer = planes[0].getBuffer();
         final ByteBuffer uBuffer = planes[1].getBuffer();
@@ -181,14 +231,27 @@ public final class FrameExtractor {
             }
         }
 
-        final Bitmap fullBitmap = Bitmap.createBitmap(
+        Bitmap bitmap = Bitmap.createBitmap(
                 argbPixels, width, height, Bitmap.Config.ARGB_8888);
-        if (width == targetWidth && height == targetHeight) {
-            return fullBitmap;
+
+        if (rotationDegrees % 360 != 0) {
+            final Matrix matrix = new Matrix();
+            matrix.postRotate(rotationDegrees);
+            final Bitmap rotated = Bitmap.createBitmap(
+                    bitmap, 0, 0, width, height, matrix, true);
+            bitmap.recycle();
+            bitmap = rotated;
         }
+
+        if (bitmap.getWidth() == targetWidth) {
+            return bitmap;
+        }
+
+        final int scaledHeight = Math.max(1, Math.round(
+                bitmap.getHeight() * (targetWidth / (float) bitmap.getWidth())));
         final Bitmap scaled = Bitmap.createScaledBitmap(
-                fullBitmap, targetWidth, targetHeight, true);
-        fullBitmap.recycle();
+                bitmap, targetWidth, scaledHeight, true);
+        bitmap.recycle();
         return scaled;
     }
 

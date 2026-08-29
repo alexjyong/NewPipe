@@ -163,6 +163,9 @@ public class Utility {
             case WEBP:
                 colorRes = R.color.webp_left_to_load_color;
                 break;
+            case IMAGE:
+                colorRes = R.color.image_left_to_load_color;
+                break;
             default:
                 colorRes = R.color.gray;
         }
@@ -185,6 +188,9 @@ public class Utility {
                 break;
             case WEBP:
                 colorRes = R.color.webp_already_load_color;
+                break;
+            case IMAGE:
+                colorRes = R.color.image_already_load_color;
                 break;
             default:
                 colorRes = R.color.gray;

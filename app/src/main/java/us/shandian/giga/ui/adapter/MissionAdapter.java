@@ -76,6 +76,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Date;
 import java.util.Locale;
@@ -373,10 +374,23 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         }
     }
 
+    private File newCacheCopyFile(final String name) {
+        final File dir = new File(mContext.getCacheDir(), "saf_copies");
+        final File[] existing = dir.listFiles();
+        if (existing != null && existing.length >= 16) {
+            Arrays.sort(existing, Comparator.comparingLong(File::lastModified).reversed());
+            for (int i = 15; i < existing.length; i++) {
+                existing[i].delete();
+            }
+        }
+        dir.mkdirs();
+        return new File(dir, name);
+    }
+
     private void openFileViaCache(Mission mission, String mimeType) {
         try {
             final Uri safUri = mission.storage.getUri();
-            final File cacheFile = new File(mContext.getCacheDir(), mission.storage.getName());
+            final File cacheFile = newCacheCopyFile(mission.storage.getName());
 
             try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
                  OutputStream os = new FileOutputStream(cacheFile)) {
@@ -434,7 +448,7 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
     private void shareFileViaCache(Mission mission) {
         try {
             final Uri safUri = mission.storage.getUri();
-            final File cacheFile = new File(mContext.getCacheDir(), mission.storage.getName());
+            final File cacheFile = newCacheCopyFile(mission.storage.getName());
 
             try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
                  OutputStream os = new FileOutputStream(cacheFile)) {
@@ -525,6 +539,9 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         }
 
         switch (msg.what) {
+            case DownloadManagerService.MESSAGE_FINISHED_ADDED:
+                applyChanges();
+                return true;
             case DownloadManagerService.MESSAGE_ERROR:
             case DownloadManagerService.MESSAGE_FINISHED:
             case DownloadManagerService.MESSAGE_DELETED:

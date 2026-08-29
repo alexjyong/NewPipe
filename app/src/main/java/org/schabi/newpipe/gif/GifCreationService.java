@@ -14,9 +14,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.download.DownloadActivity;
@@ -25,6 +27,7 @@ import org.schabi.newpipe.streams.io.StoredFileHelper;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import us.shandian.giga.get.FinishedMission;
 import us.shandian.giga.service.DownloadManagerService;
@@ -43,9 +46,14 @@ public class GifCreationService extends Service {
     public static final String EXTRA_VIDEO_TITLE = "video_title";
     public static final String EXTRA_OUTPUT_URI = "output_uri";
 
-    private static final int OUTPUT_WIDTH = 480;
-    private static final int GIF_FPS = 10;
-    private static final int WEBP_FPS = 15;
+    public static final int OUTPUT_WIDTH = 480;
+    public static final int GIF_FPS = 10;
+    public static final int WEBP_FPS = 15;
+
+    private final AtomicBoolean jobRunning = new AtomicBoolean();
+    private volatile boolean cancelled = false;
+    @Nullable
+    private Thread worker = null;
 
     @Override
     public void onCreate() {
@@ -57,6 +65,11 @@ public class GifCreationService extends Service {
     public int onStartCommand(final Intent intent, final int flags, final int startId) {
         if (intent == null) {
             stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (!jobRunning.compareAndSet(false, true)) {
+            Toast.makeText(this, R.string.gif_creation_busy, Toast.LENGTH_SHORT).show();
+            stopSelf(startId);
             return START_NOT_STICKY;
         }
 
@@ -71,20 +84,32 @@ public class GifCreationService extends Service {
         final Notification notification = buildProgressNotification(displayName);
         startForeground(NOTIFICATION_ID, notification);
 
-        new Thread(() -> {
+        cancelled = false;
+        worker = new Thread(() -> {
             try {
                 processGifCreation(streamUrl, startMs, endMs, format,
                         displayName, outputUri);
+            } catch (final OutOfMemoryError e) {
+                Log.e(TAG, "GIF creation ran out of memory", e);
+                showErrorNotification(displayName, e);
             } catch (final Exception e) {
                 Log.e(TAG, "GIF creation failed", e);
-                showErrorNotification(displayName, e);
+                if (!isCancelled()) {
+                    showErrorNotification(displayName, e);
+                }
             } finally {
-                stopForeground(STOP_FOREGROUND_REMOVE);
+                jobRunning.set(false);
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
                 stopSelf(startId);
             }
-        }).start();
+        });
+        worker.start();
 
         return START_NOT_STICKY;
+    }
+
+    private boolean isCancelled() {
+        return cancelled || Thread.currentThread().isInterrupted();
     }
 
     private void processGifCreation(final String streamUrl, final long startMs,
@@ -95,30 +120,35 @@ public class GifCreationService extends Service {
         final int fps = isGif ? GIF_FPS : WEBP_FPS;
 
         final List<Bitmap> frames = FrameExtractor.extract(
-                streamUrl, startMs, endMs, OUTPUT_WIDTH, fps);
+                streamUrl, startMs, endMs, OUTPUT_WIDTH, fps, this::isCancelled);
+
+        if (isCancelled()) {
+            recycleFrames(frames);
+            return;
+        }
 
         if (frames.isEmpty()) {
             throw new IOException("No frames were extracted from the video");
         }
 
-        final List<Bitmap> processedFrames = TextOverlayStub.apply(frames);
-
         final byte[] encoded;
-        if (isGif) {
-            encoded = GifEncoder.encode(processedFrames);
-        } else {
-            encoded = WebPEncoder.encode(processedFrames);
+        try {
+            encoded = isGif ? GifEncoder.encode(frames) : WebPEncoder.encode(frames);
+        } finally {
+            recycleFrames(frames);
         }
 
         final String mimeType = isGif ? "image/gif" : "image/webp";
         writeOutput(outputUri, mimeType, encoded);
 
-        for (final Bitmap bmp : processedFrames) {
+        addToDownloadQueue(outputUri, mimeType, encoded.length, isGif);
+        showCompletionNotification(displayName);
+    }
+
+    private static void recycleFrames(final List<Bitmap> frames) {
+        for (final Bitmap bmp : frames) {
             bmp.recycle();
         }
-
-        addToDownloadQueue(streamUrl, outputUri, mimeType, encoded.length, isGif);
-        showCompletionNotification(displayName);
     }
 
     private void writeOutput(final String outputUri, final String mimeType,
@@ -134,9 +164,8 @@ public class GifCreationService extends Service {
         }
     }
 
-    private void addToDownloadQueue(final String sourceUrl, final String outputUri,
-                                    final String mimeType, final long fileSize,
-                                    final boolean isGif) {
+    private void addToDownloadQueue(final String outputUri, final String mimeType,
+                                    final long fileSize, final boolean isGif) {
         final Context ctx = this;
         final Intent bindIntent = new Intent(ctx, DownloadManagerService.class);
         bindService(bindIntent, new ServiceConnection() {
@@ -146,7 +175,7 @@ public class GifCreationService extends Service {
                     final DownloadManagerService.DownloadManagerBinder binder =
                             (DownloadManagerService.DownloadManagerBinder) service;
                     final FinishedMission mission = new FinishedMission();
-                    mission.source = sourceUrl != null ? sourceUrl : "";
+                    mission.source = "";
                     mission.length = fileSize;
                     mission.timestamp = System.currentTimeMillis();
                     mission.kind = isGif ? 'g' : 'w';
@@ -209,7 +238,7 @@ public class GifCreationService extends Service {
         }
     }
 
-    private void showErrorNotification(final String displayName, final Exception e) {
+    private void showErrorNotification(final String displayName, final Throwable e) {
         final String errorMsg = e.getMessage() != null ? e.getMessage()
                 : e.getClass().getSimpleName();
         final Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
@@ -225,6 +254,24 @@ public class GifCreationService extends Service {
         if (nm != null) {
             nm.notify(NOTIFICATION_ID + 1, notification);
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        cancelled = true;
+        if (worker != null) {
+            worker.interrupt();
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    public void onTaskRemoved(final Intent rootIntent) {
+        cancelled = true;
+        if (worker != null) {
+            worker.interrupt();
+        }
+        super.onTaskRemoved(rootIntent);
     }
 
     @Nullable

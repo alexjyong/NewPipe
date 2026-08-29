@@ -67,14 +67,15 @@
             android:text="@string/download_type_gif" />
     </RadioGroup>
 
-    <!-- Shown only on the GIF/WebP tab. Anchored to the same view as
-         quality_spinner, so the stream chain below is unaffected. -->
+    <!-- shown only on the GIF/WebP tab; anchored to the same view as
+         quality_spinner so the stream chain below is untouched -->
     <LinearLayout
         android:id="@+id/clip_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@+id/video_audio_group"
         android:orientation="vertical"
+        android:theme="@style/NewPipe.MaterialDialogOverlay"
         android:visibility="gone"
         tools:visibility="visible">
 
@@ -180,15 +181,6 @@
                 android:text="@string/gif_format_webp" />
 
         </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <Button
-            android:id="@+id/add_text_button"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginBottom="8dp"
-            android:text="@string/gif_add_text" />
 
     </LinearLayout>
 
