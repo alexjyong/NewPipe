@@ -59,19 +59,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/caption_setting_title" />
-    </RadioGroup>
-
-    <!-- gif gets its own row: four radio buttons overflow the dialog width on narrow screens -->
-    <RadioGroup
-        android:id="@+id/gif_group"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/video_audio_group"
-        android:layout_marginLeft="20dp"
-        android:layout_marginBottom="6dp"
-        android:gravity="left"
-        android:orientation="horizontal"
-        tools:ignore="RtlHardcoded">
 
         <RadioButton
             android:id="@+id/gif_button"
@@ -86,7 +73,7 @@
         android:id="@+id/clip_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/gif_group"
+        android:layout_below="@+id/video_audio_group"
         android:orientation="vertical"
         android:theme="@style/NewPipe.MaterialDialogOverlay"
         android:visibility="gone"
