@@ -325,6 +325,9 @@ dependencies {
     // HTML parser
     implementation(libs.jsoup)
 
+    // GIF encoding
+    implementation(libs.squareup.gifencoder)
+
     // HTTP client
     implementation(libs.squareup.okhttp)
 
