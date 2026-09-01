@@ -1592,7 +1592,8 @@ class VideoDetailFragment :
         val info = currentInfo ?: return
 
         try {
-            val downloadDialog = DownloadDialog(activity, info)
+            val positionMs = player?.exoPlayer?.currentPosition?.toLong() ?: 0L
+            val downloadDialog = DownloadDialog(activity, info, positionMs, false)
             downloadDialog.show(activity.supportFragmentManager, "downloadDialog")
         } catch (e: Exception) {
             showSnackbar(

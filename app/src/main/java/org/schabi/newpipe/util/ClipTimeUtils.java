@@ -1,72 +1,10 @@
 package org.schabi.newpipe.util;
 
-import androidx.annotation.Nullable;
-
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public final class ClipTimeUtils {
 
-    private static final Pattern HOURS_PATTERN =
-            Pattern.compile("^(\\d{1,3}):(\\d{1,2}):(\\d{1,2})(?:\\.(\\d))?$");
-    private static final Pattern MINUTES_PATTERN =
-            Pattern.compile("^(\\d{1,3}):(\\d{1,2})(?:\\.(\\d))?$");
-    private static final Pattern SECONDS_PATTERN =
-            Pattern.compile("^(\\d{1,5})(?:\\.(\\d))?$");
-
     private ClipTimeUtils() {
-    }
-
-    /**
-     * Parses a clip time accepted from user input. Accepts everything
-     * {@link #formatClipTime} produces plus plain seconds.
-     *
-     * @param s the raw user input, e.g. {@code "5.0s"}, {@code "75.3"},
-     *          {@code "1:23.5"}, {@code "1:02:03.5"}
-     * @return the time in seconds, or null when the input is not a valid clip time
-     */
-    @Nullable
-    public static Float parseClipTime(final String s) {
-        String input = s == null ? "" : s.trim();
-        if (input.isEmpty()) {
-            return null;
-        }
-        final char last = input.charAt(input.length() - 1);
-        if (last == 's' || last == 'S') {
-            input = input.substring(0, input.length() - 1).trim();
-        }
-        if (input.isEmpty()) {
-            return null;
-        }
-
-        Matcher matcher = SECONDS_PATTERN.matcher(input);
-        if (matcher.matches()) {
-            return toSeconds(Long.parseLong(matcher.group(1)), matcher.group(2));
-        }
-
-        matcher = HOURS_PATTERN.matcher(input);
-        if (matcher.matches()) {
-            final int hours = Integer.parseInt(matcher.group(1));
-            final int minutes = Integer.parseInt(matcher.group(2));
-            final int seconds = Integer.parseInt(matcher.group(3));
-            if (minutes >= 60 || seconds >= 60) {
-                return null;
-            }
-            return hours * 3600f + toSeconds(minutes * 60L + seconds, matcher.group(4));
-        }
-
-        matcher = MINUTES_PATTERN.matcher(input);
-        if (matcher.matches()) {
-            final int minutes = Integer.parseInt(matcher.group(1));
-            final int seconds = Integer.parseInt(matcher.group(2));
-            if (seconds >= 60) {
-                return null;
-            }
-            return toSeconds(minutes * 60L + seconds, matcher.group(3));
-        }
-
-        return null;
     }
 
     /**
@@ -143,10 +81,5 @@ public final class ClipTimeUtils {
     private static int scaledHeight(final int videoWidth, final int videoHeight,
                                     final int targetWidth) {
         return Math.max(1, Math.round(videoHeight * (targetWidth / (float) videoWidth)));
-    }
-
-    private static float toSeconds(final long whole, @Nullable final String tenth) {
-        final int tenths = tenth != null ? Integer.parseInt(tenth) : 0;
-        return (float) (whole + tenths / 10.0);
     }
 }

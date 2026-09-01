@@ -88,8 +88,8 @@
             android:gravity="center"
             android:text="@string/clip_time_range" />
 
-        <com.google.android.material.slider.RangeSlider
-            android:id="@+id/time_range_slider"
+        <com.google.android.material.slider.Slider
+            android:id="@+id/clip_start_slider"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
@@ -109,39 +109,46 @@
             android:baselineAligned="false"
             android:orientation="horizontal">
 
-            <org.schabi.newpipe.views.NewPipeEditText
-                android:id="@+id/start_time_edit"
+            <org.schabi.newpipe.views.NewPipeTextView
+                android:id="@+id/clip_start_text"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
+                android:layout_gravity="center_vertical"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:hint="@string/gif_start_time"
-                android:inputType="text"
-                android:maxLines="1" />
-
-            <org.schabi.newpipe.views.NewPipeTextView
-                android:id="@+id/clip_duration_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:gravity="center"
-                tools:text="5.0s" />
+                tools:text="Start 1:23.5" />
 
             <org.schabi.newpipe.views.NewPipeEditText
-                android:id="@+id/end_time_edit"
+                android:id="@+id/clip_duration_edit"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:hint="@string/gif_end_time"
-                android:inputType="text"
+                android:hint="@string/clip_length_seconds"
+                android:inputType="numberDecimal"
                 android:maxLines="1" />
 
+            <org.schabi.newpipe.views.NewPipeTextView
+                android:id="@+id/clip_end_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"
+                android:gravity="center"
+                tools:text="End 1:31.5" />
+
         </LinearLayout>
+
+        <org.schabi.newpipe.views.NewPipeTextView
+            android:id="@+id/clip_duration_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:gravity="center"
+            tools:text="8.0s" />
 
         <org.schabi.newpipe.views.NewPipeTextView
             android:id="@+id/clip_duration_warning"

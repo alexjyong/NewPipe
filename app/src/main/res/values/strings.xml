@@ -938,6 +938,8 @@
     <string name="webp_creation_started">WebP creation started in background</string>
     <string name="gif_start_time">Start</string>
     <string name="gif_end_time">End</string>
+    <string name="clip_length_seconds">Seconds</string>
+    <string name="clip_length_invalid">Enter a length in seconds, e.g. 8 or 8.5</string>
     <string name="clip_time_range">Time Range</string>
     <string name="api23_requirement_dialog_title">NewPipe is dropping support for Android 5</string>
     <string name="api23_requirement_dialog_message">Unfortunately NewPipe depends on a few libraries that dropped support for Android 5.0 and 5.1. The next NewPipe release will therefore only work on devices with Android 6 or higher, sadly. Read more in the blogpost.</string>

@@ -22,7 +22,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.EditText;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.Toast;
@@ -150,7 +149,7 @@ public class DownloadDialog extends DialogFragment
     private String mimeTmp;
 
     private int clipDurationSeconds;
-    private boolean updatingClipFromText = false;
+    private float clipLengthSec = DEFAULT_CLIP_SECONDS;
     // last auto-generated clip filename, so we can tell an untouched name from an edited one.
     // not @State on purpose: after recreation it's null and a restored name is left alone
     private String lastGeneratedGifName;
@@ -578,44 +577,44 @@ public class DownloadDialog extends DialogFragment
         final int maxDuration = Math.max(clipDurationSeconds, 1);
 
         // clamp start so there's always room for 0.1s after it, and round to the slider's
-        // 0.1 step size, else setValues() throws on non-multiple values
+        // 0.1 step size, else setValue() throws on non-multiple values
         final float startSec = Math.round(
                 Math.min(clipStartPositionMs / 1000f, maxDuration - 0.1f) * 10f) / 10f;
-        final float endSec = Math.min(startSec + DEFAULT_CLIP_SECONDS, maxDuration);
 
-        dialogBinding.timeRangeSlider.setValueFrom(0f);
-        dialogBinding.timeRangeSlider.setValueTo(maxDuration);
-        dialogBinding.timeRangeSlider.setMinSeparationValue(0.1f);
-        dialogBinding.timeRangeSlider.setValues(Math.max(startSec, 0f), endSec);
-        dialogBinding.timeRangeSlider.setLabelFormatter(
+        dialogBinding.clipStartSlider.setValueFrom(0f);
+        dialogBinding.clipStartSlider.setValueTo(maxDuration);
+        dialogBinding.clipStartSlider.setValue(Math.max(startSec, 0f));
+        dialogBinding.clipStartSlider.setLabelFormatter(
                 value -> ClipTimeUtils.formatClipTime(value));
 
-        // attached after setValues() so seeding the slider doesn't fire it
-        dialogBinding.timeRangeSlider.addOnChangeListener((slider, value, fromUser) -> {
-            setClipTimeTexts();
+        dialogBinding.clipDurationEdit.setText(
+                String.format(Locale.US, "%.1f", clipLengthSec));
+
+        // attached after setValue() so seeding the slider doesn't fire it
+        dialogBinding.clipStartSlider.addOnChangeListener((slider, value, fromUser) -> {
+            updateClipTimes();
             updateClipDuration();
             if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
                 updateGifFileName();
             }
         });
 
-        setClipTimeTexts();
-        updateClipDuration();
+        setupClipDurationField();
 
-        setupClipTimeField(dialogBinding.startTimeEdit, true);
-        setupClipTimeField(dialogBinding.endTimeEdit, false);
+        updateClipTimes();
+        updateClipDuration();
     }
 
     private float getClipStartSec() {
-        return dialogBinding.timeRangeSlider.getValues().get(0);
+        return dialogBinding.clipStartSlider.getValue();
     }
 
     private float getClipEndSec() {
-        return dialogBinding.timeRangeSlider.getValues().get(1);
+        return Math.min(getClipStartSec() + clipLengthSec, clipDurationSeconds);
     }
 
-    private void setupClipTimeField(final EditText field, final boolean isStart) {
-        field.addTextChangedListener(new TextWatcher() {
+    private void setupClipDurationField() {
+        dialogBinding.clipDurationEdit.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(final CharSequence s, final int start,
                                           final int count, final int after) { }
@@ -626,28 +625,23 @@ public class DownloadDialog extends DialogFragment
 
             @Override
             public void afterTextChanged(final Editable s) {
-                final Float secs = ClipTimeUtils.parseClipTime(s.toString());
-                if (secs == null) {
+                final String raw = s.toString().trim().replace(',', '.');
+                final float len;
+                try {
+                    len = Float.parseFloat(raw);
+                } catch (final NumberFormatException e) {
+                    dialogBinding.clipDurationEdit.setError(raw.isEmpty()
+                            ? null : getString(R.string.clip_length_invalid));
                     return;
                 }
-                final float clamped = Math.round(
-                        Math.max(0f, Math.min(clipDurationSeconds, secs)) * 10f) / 10f;
-                final float otherProgress = isStart ? getClipEndSec() : getClipStartSec();
-
-                if (isStart && clamped >= otherProgress) {
+                if (len < 0.1f) {
+                    dialogBinding.clipDurationEdit.setError(
+                            getString(R.string.clip_length_invalid));
                     return;
                 }
-                if (!isStart && clamped <= otherProgress) {
-                    return;
-                }
-
-                updatingClipFromText = true;
-                if (isStart) {
-                    dialogBinding.timeRangeSlider.setValues(clamped, getClipEndSec());
-                } else {
-                    dialogBinding.timeRangeSlider.setValues(getClipStartSec(), clamped);
-                }
-                updatingClipFromText = false;
+                dialogBinding.clipDurationEdit.setError(null);
+                clipLengthSec = len;
+                updateClipTimes();
                 updateClipDuration();
                 if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
                     updateGifFileName();
@@ -656,12 +650,11 @@ public class DownloadDialog extends DialogFragment
         });
     }
 
-    private void setClipTimeTexts() {
-        if (updatingClipFromText) {
-            return;
-        }
-        dialogBinding.startTimeEdit.setText(ClipTimeUtils.formatClipTime(getClipStartSec()));
-        dialogBinding.endTimeEdit.setText(ClipTimeUtils.formatClipTime(getClipEndSec()));
+    private void updateClipTimes() {
+        dialogBinding.clipStartText.setText(getString(R.string.gif_start_time) + " "
+                + ClipTimeUtils.formatClipTime(getClipStartSec()));
+        dialogBinding.clipEndText.setText(getString(R.string.gif_end_time) + " "
+                + ClipTimeUtils.formatClipTime(getClipEndSec()));
     }
 
     private void updateClipDuration() {
