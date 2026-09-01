@@ -42,6 +42,7 @@ import androidx.fragment.app.DialogFragment;
 import androidx.preference.PreferenceManager;
 
 import com.evernote.android.state.State;
+import com.google.android.material.slider.Slider;
 import com.livefront.bridge.Bridge;
 import com.nononsenseapps.filepicker.Utils;
 
@@ -599,6 +600,11 @@ public class DownloadDialog extends DialogFragment
             }
         });
 
+        nudgeClipStart(dialogBinding.clipNudgeBackLong, -1.0f);
+        nudgeClipStart(dialogBinding.clipNudgeBack, -0.1f);
+        nudgeClipStart(dialogBinding.clipNudgeForward, 0.1f);
+        nudgeClipStart(dialogBinding.clipNudgeForwardLong, 1.0f);
+
         setupClipDurationField();
 
         updateClipTimes();
@@ -611,6 +617,18 @@ public class DownloadDialog extends DialogFragment
 
     private float getClipEndSec() {
         return Math.min(getClipStartSec() + clipLengthSec, clipDurationSeconds);
+    }
+
+    private void nudgeClipStart(final View button, final float deltaSeconds) {
+        button.setOnClickListener(v -> {
+            final Slider slider = dialogBinding.clipStartSlider;
+            final float nudged = Math.round(
+                    Math.max(0f, Math.min(slider.getValueTo(),
+                            slider.getValue() + deltaSeconds)) * 10f) / 10f;
+            if (nudged != slider.getValue()) {
+                slider.setValue(nudged);
+            }
+        });
     }
 
     private void setupClipDurationField() {
