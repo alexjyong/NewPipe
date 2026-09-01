@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 
 public final class FrameExtractor {
 
@@ -55,12 +56,14 @@ public final class FrameExtractor {
      * @param widthPx    target width; height derived from the aspect ratio of each frame
      * @param fps        frames per second to sample
      * @param stopSignal polled between frames; a true result stops extraction early
+     * @param progressListener called with the running frame count after each decoded frame
      * @return ordered list of ARGB_8888 bitmaps
      */
     public static List<Bitmap> extract(final String videoUrl, final long startMs,
                                        final long endMs, final int widthPx,
                                        final int fps,
-                                       final BooleanSupplier stopSignal) throws IOException {
+                                       final BooleanSupplier stopSignal,
+                                       final IntConsumer progressListener) throws IOException {
         if (videoUrl == null || videoUrl.isEmpty()) {
             throw new IOException("Video URL is null or empty");
         }
@@ -137,6 +140,7 @@ public final class FrameExtractor {
                         if (image != null) {
                             frames.add(imageToBitmap(image, widthPx, rotationDegrees));
                             image.close();
+                            progressListener.accept(frames.size());
                         } else if (++nullImageFrames == 1) {
                             Log.w(TAG, "Decoder returned a null image; skipping frame");
                         }

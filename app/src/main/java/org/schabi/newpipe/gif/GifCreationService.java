@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.ServiceCompat;
 
 import org.schabi.newpipe.R;
@@ -28,6 +29,7 @@ import org.schabi.newpipe.streams.io.StoredFileHelper;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import us.shandian.giga.get.FinishedMission;
 import us.shandian.giga.service.DownloadManagerService;
@@ -51,7 +53,10 @@ public class GifCreationService extends Service {
     public static final int WEBP_FPS = 15;
 
     private final AtomicBoolean jobRunning = new AtomicBoolean();
+    private final AtomicInteger jobGeneration = new AtomicInteger();
     private volatile boolean cancelled = false;
+    private volatile int lastStartId;
+    private volatile Notification currentNotification;
     @Nullable
     private Thread worker = null;
 
@@ -63,15 +68,21 @@ public class GifCreationService extends Service {
 
     @Override
     public int onStartCommand(final Intent intent, final int flags, final int startId) {
+        lastStartId = startId;
         if (intent == null) {
             stopSelf();
             return START_NOT_STICKY;
         }
         if (!jobRunning.compareAndSet(false, true)) {
+            // a running job must never be torn down from here; just discharge
+            // the fg obligation of this start by re-posting its live notification
+            Log.i(TAG, "Creation already running, ignoring start " + startId);
             Toast.makeText(this, R.string.gif_creation_busy, Toast.LENGTH_SHORT).show();
-            stopSelf(startId);
+            startForeground(NOTIFICATION_ID, currentNotification != null
+                    ? currentNotification : buildProgressNotification("GIF", 0, 1));
             return START_NOT_STICKY;
         }
+        final int generation = jobGeneration.incrementAndGet();
 
         final String streamUrl = intent.getStringExtra(EXTRA_STREAM_URL);
         final long startMs = intent.getLongExtra(EXTRA_START_MS, 0);
@@ -81,7 +92,7 @@ public class GifCreationService extends Service {
         final String outputUri = intent.getStringExtra(EXTRA_OUTPUT_URI);
 
         final String displayName = videoTitle != null ? videoTitle : "GIF";
-        final Notification notification = buildProgressNotification(displayName);
+        final Notification notification = buildProgressNotification(displayName, 0, 1);
         startForeground(NOTIFICATION_ID, notification);
 
         cancelled = false;
@@ -99,8 +110,12 @@ public class GifCreationService extends Service {
                 }
             } finally {
                 jobRunning.set(false);
-                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
-                stopSelf(startId);
+                // a newer job took over while we finished; it owns the
+                // notification and the service teardown now
+                if (generation == jobGeneration.get()) {
+                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
+                    stopSelf(lastStartId);
+                }
             }
         });
         worker.start();
@@ -118,11 +133,15 @@ public class GifCreationService extends Service {
                                     final String outputUri) throws Exception {
         final boolean isGif = "gif".equals(format);
         final int fps = isGif ? GIF_FPS : WEBP_FPS;
+        final int estimatedTotalFrames =
+                Math.max(1, Math.round((endMs - startMs) / 1000f * fps));
 
         final List<Bitmap> frames = FrameExtractor.extract(
-                streamUrl, startMs, endMs, OUTPUT_WIDTH, fps, this::isCancelled);
+                streamUrl, startMs, endMs, OUTPUT_WIDTH, fps, this::isCancelled,
+                done -> updateProgressNotification(displayName, done, estimatedTotalFrames));
 
         if (isCancelled()) {
+            Log.i(TAG, "Creation cancelled");
             recycleFrames(frames);
             return;
         }
@@ -130,6 +149,8 @@ public class GifCreationService extends Service {
         if (frames.isEmpty()) {
             throw new IOException("No frames were extracted from the video");
         }
+
+        updateProgressNotification(displayName, estimatedTotalFrames, estimatedTotalFrames);
 
         final byte[] encoded;
         try {
@@ -209,13 +230,22 @@ public class GifCreationService extends Service {
         }
     }
 
-    private Notification buildProgressNotification(final String displayName) {
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
+    private Notification buildProgressNotification(final String displayName,
+                                                   final int done, final int total) {
+        final Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setContentTitle(getString(R.string.gif_creating_notification, displayName))
-                .setProgress(0, 0, true)
+                .setProgress(total, Math.min(done, total), false)
                 .setOngoing(true)
                 .build();
+        currentNotification = notification;
+        return notification;
+    }
+
+    private void updateProgressNotification(final String displayName,
+                                            final int done, final int total) {
+        NotificationManagerCompat.from(this)
+                .notify(NOTIFICATION_ID, buildProgressNotification(displayName, done, total));
     }
 
     private void showCompletionNotification(final String displayName) {

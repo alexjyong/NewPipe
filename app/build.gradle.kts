@@ -326,7 +326,9 @@ dependencies {
     implementation(libs.jsoup)
 
     // GIF encoding
-    implementation(libs.squareup.gifencoder)
+    implementation(libs.glide.gifencoder) {
+        exclude(group = "com.github.bumptech.glide", module = "glide")
+    }
 
     // HTTP client
     implementation(libs.squareup.okhttp)
