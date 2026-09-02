@@ -60,7 +60,6 @@ import org.schabi.newpipe.extractor.stream.Stream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
-import org.schabi.newpipe.gif.FrameExtractor;
 import org.schabi.newpipe.gif.GifCreationService;
 import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.streams.io.NoFileManagerSafeGuard;
@@ -102,9 +101,6 @@ public class DownloadDialog extends DialogFragment
 
     private static final int WARN_CLIP_SECONDS = 10;
     private static final int DEFAULT_CLIP_SECONDS = 5;
-    private static final long MAX_CLIP_BYTES = 160L * 1024 * 1024;
-    private static final int FALLBACK_PROBE_WIDTH = 480;
-    private static final int FALLBACK_PROBE_HEIGHT = 853;
 
     @State
     StreamInfo currentInfo;
@@ -1166,25 +1162,15 @@ public class DownloadDialog extends DialogFragment
         final String filename = getNameEditText().concat(isGif ? ".gif" : ".webp");
 
         final int fps = isGif ? GifCreationService.GIF_FPS : GifCreationService.WEBP_FPS;
-        final int probeWidth = FALLBACK_PROBE_WIDTH;
-        final int probeHeight = FALLBACK_PROBE_HEIGHT;
-        try {
-            final int[] dims = FrameExtractor.probeVideoDimensions(streamUrl);
-            final long estimatedBytes = ClipTimeUtils.estimateClipBytes(
-                    endSec - startSec, dims[0], dims[1],
-                    GifCreationService.OUTPUT_WIDTH, fps);
-            if (estimatedBytes > MAX_CLIP_BYTES) {
-                Toast.makeText(context, R.string.gif_clip_too_long, Toast.LENGTH_LONG).show();
-                return;
-            }
-        } catch (final IOException e) {
-            final long estimatedBytes = ClipTimeUtils.estimateClipBytes(
-                    endSec - startSec, probeWidth, probeHeight,
-                    GifCreationService.OUTPUT_WIDTH, fps);
-            if (estimatedBytes > MAX_CLIP_BYTES) {
-                Toast.makeText(context, R.string.gif_clip_too_long, Toast.LENGTH_LONG).show();
-                return;
-            }
+        // no network on the UI thread: estimate with conservative fallback dims;
+        // the service re-checks with the real probed dimensions
+        final long estimatedBytes = ClipTimeUtils.estimateClipBytes(
+                endSec - startSec, GifCreationService.FALLBACK_PROBE_WIDTH,
+                GifCreationService.FALLBACK_PROBE_HEIGHT,
+                GifCreationService.OUTPUT_WIDTH, fps);
+        if (estimatedBytes > GifCreationService.MAX_CLIP_BYTES) {
+            Toast.makeText(context, R.string.gif_clip_too_long, Toast.LENGTH_LONG).show();
+            return;
         }
 
         final Intent intent = new Intent(context, GifCreationService.class);

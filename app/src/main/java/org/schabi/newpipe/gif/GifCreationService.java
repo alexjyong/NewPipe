@@ -25,6 +25,7 @@ import org.schabi.newpipe.R;
 import org.schabi.newpipe.download.DownloadActivity;
 import org.schabi.newpipe.streams.io.SharpStream;
 import org.schabi.newpipe.streams.io.StoredFileHelper;
+import org.schabi.newpipe.util.ClipTimeUtils;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,6 +52,9 @@ public class GifCreationService extends Service {
     public static final int OUTPUT_WIDTH = 480;
     public static final int GIF_FPS = 10;
     public static final int WEBP_FPS = 15;
+    public static final long MAX_CLIP_BYTES = 160L * 1024 * 1024;
+    public static final int FALLBACK_PROBE_WIDTH = 480;
+    public static final int FALLBACK_PROBE_HEIGHT = 853;
 
     private final AtomicBoolean jobRunning = new AtomicBoolean();
     private final AtomicInteger jobGeneration = new AtomicInteger();
@@ -136,6 +140,17 @@ public class GifCreationService extends Service {
         final int estimatedTotalFrames =
                 Math.max(1, Math.round((endMs - startMs) / 1000f * fps));
 
+        // the dialog's pre-check used fallback dims (no network on the UI
+        // thread); re-check with the real dimensions on this worker thread
+        final int[] probeDims = probeVideoDimensionsWithFallback(streamUrl);
+        if (isCancelled()) {
+            return;
+        }
+        if (ClipTimeUtils.estimateClipBytes((endMs - startMs) / 1000f,
+                probeDims[0], probeDims[1], OUTPUT_WIDTH, fps) > MAX_CLIP_BYTES) {
+            throw new IOException(getString(R.string.gif_clip_too_long));
+        }
+
         final List<Bitmap> frames = FrameExtractor.extract(
                 streamUrl, startMs, endMs, OUTPUT_WIDTH, fps, this::isCancelled,
                 done -> updateProgressNotification(displayName, done, estimatedTotalFrames));
@@ -164,6 +179,15 @@ public class GifCreationService extends Service {
 
         addToDownloadQueue(outputUri, mimeType, encoded.length, isGif);
         showCompletionNotification(displayName);
+    }
+
+    private int[] probeVideoDimensionsWithFallback(final String streamUrl) {
+        try {
+            return FrameExtractor.probeVideoDimensions(streamUrl);
+        } catch (final IOException e) {
+            Log.w(TAG, "Could not probe video dimensions, using fallback", e);
+            return new int[]{FALLBACK_PROBE_WIDTH, FALLBACK_PROBE_HEIGHT};
+        }
     }
 
     private static void recycleFrames(final List<Bitmap> frames) {
