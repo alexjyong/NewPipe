@@ -922,7 +922,7 @@
     <string name="kao_solution">Solution</string>
     <string name="gif_creation">Create GIF/WebP</string>
     <string name="gif_creation_title">Create GIF/WebP</string>
-    <string name="download_type_gif">GIF/WebP</string>
+    <string name="download_type_gif">GIF</string>
     <string name="gif_format_gif">GIF</string>
     <string name="gif_format_webp">WebP</string>
     <string name="gif_clip_duration">%.1fs</string>
