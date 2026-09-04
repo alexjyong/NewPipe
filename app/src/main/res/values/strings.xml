@@ -925,7 +925,6 @@
     <string name="download_type_gif">GIF</string>
     <string name="gif_format_gif">GIF</string>
     <string name="gif_format_webp">WebP</string>
-    <string name="gif_clip_duration">%.1fs</string>
     <string name="gif_time_range_error">Clip must be at least 0.1 seconds</string>
     <string name="gif_clip_too_long">Clip too long for GIF/WebP</string>
     <string name="gif_creation_busy">Already creating a GIF/WebP</string>
@@ -938,8 +937,7 @@
     <string name="webp_creation_started">WebP creation started in background</string>
     <string name="gif_start_time">Start</string>
     <string name="gif_end_time">End</string>
-    <string name="clip_length_seconds">Seconds</string>
-    <string name="clip_length_invalid">Enter a length in seconds, e.g. 8 or 8.5</string>
+    <string name="clip_length_title">Length</string>
     <string name="clip_nudge_back_long">«</string>
     <string name="clip_nudge_back">‹</string>
     <string name="clip_nudge_forward">›</string>

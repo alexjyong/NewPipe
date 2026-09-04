@@ -14,8 +14,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
 import android.provider.Settings;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -502,12 +500,16 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.audioTrackPresentInVideoText.setVisibility(View.GONE);
 
         // only generate a clip name if the field was not edited by the user
+        if (shouldAutoGenerateClipName()) {
+            updateGifFileName();
+        }
+    }
+
+    private boolean shouldAutoGenerateClipName() {
         final String plainName = FilenameUtils.createFilename(context, currentInfo.getName());
         final String current = Objects.requireNonNullElse(
                 dialogBinding.fileName.getText(), "").toString();
-        if (current.isEmpty() || current.equals(plainName) || isGeneratedGifNameInField()) {
-            updateGifFileName();
-        }
+        return current.isEmpty() || current.equals(plainName) || isGeneratedGifNameInField();
     }
 
     private void setupAudioSpinner() {
@@ -584,14 +586,11 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.clipStartSlider.setLabelFormatter(
                 value -> ClipTimeUtils.formatClipTime(value));
 
-        dialogBinding.clipDurationEdit.setText(
-                String.format(Locale.US, "%.1f", clipLengthSec));
-
         // attached after setValue() so seeding the slider doesn't fire it
         dialogBinding.clipStartSlider.addOnChangeListener((slider, value, fromUser) -> {
             updateClipTimes();
             updateClipDuration();
-            if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+            if (shouldAutoGenerateClipName()) {
                 updateGifFileName();
             }
         });
@@ -601,7 +600,7 @@ public class DownloadDialog extends DialogFragment
         nudgeClipStart(dialogBinding.clipNudgeForward, 0.1f);
         nudgeClipStart(dialogBinding.clipNudgeForwardLong, 1.0f);
 
-        setupClipDurationField();
+        setupLengthSlider();
 
         updateClipTimes();
         updateClipDuration();
@@ -627,41 +626,41 @@ public class DownloadDialog extends DialogFragment
         });
     }
 
-    private void setupClipDurationField() {
-        dialogBinding.clipDurationEdit.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(final CharSequence s, final int start,
-                                          final int count, final int after) { }
+    private void setupLengthSlider() {
+        final Slider slider = dialogBinding.clipLengthSlider;
+        slider.setValueFrom(0.1f);
+        slider.setValueTo(lengthCapSec());
+        slider.setValue(Math.max(0.1f, Math.min(snapToStepSec(clipLengthSec),
+                slider.getValueTo())));
+        slider.setLabelFormatter(value -> ClipTimeUtils.formatClipTime(value));
 
-            @Override
-            public void onTextChanged(final CharSequence s, final int start,
-                                      final int before, final int count) { }
-
-            @Override
-            public void afterTextChanged(final Editable s) {
-                final String raw = s.toString().trim().replace(',', '.');
-                final float len;
-                try {
-                    len = Float.parseFloat(raw);
-                } catch (final NumberFormatException e) {
-                    dialogBinding.clipDurationEdit.setError(raw.isEmpty()
-                            ? null : getString(R.string.clip_length_invalid));
-                    return;
-                }
-                if (len < 0.1f) {
-                    dialogBinding.clipDurationEdit.setError(
-                            getString(R.string.clip_length_invalid));
-                    return;
-                }
-                dialogBinding.clipDurationEdit.setError(null);
-                clipLengthSec = len;
-                updateClipTimes();
-                updateClipDuration();
-                if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
-                    updateGifFileName();
-                }
+        // attached after setValue() so seeding the slider doesn't fire it
+        slider.addOnChangeListener((s, value, fromUser) -> {
+            clipLengthSec = snapToStepSec(value);
+            updateClipTimes();
+            updateClipDuration();
+            if (shouldAutoGenerateClipName()) {
+                updateGifFileName();
             }
         });
+    }
+
+    private static float snapToStepSec(final float seconds) {
+        // Slider throws unless (value - valueFrom) is an exact multiple of
+        // stepSize 0.1; float differences are not, so round them onto the grid
+        return (float) (Math.round(seconds * 10f) / 10.0);
+    }
+
+    private float lengthCapSec() {
+        // memory budget at the fallback dims and GIF's 10 fps: one fixed track
+        // for both formats. WebP lengths beyond its 15 fps budget are rejected
+        // by the service's real-dimensions re-check, not by this track
+        return Math.max(0.1f, snapToStepSec(ClipTimeUtils.maxClipSeconds(
+                GifCreationService.FALLBACK_PROBE_WIDTH,
+                GifCreationService.FALLBACK_PROBE_HEIGHT,
+                GifCreationService.OUTPUT_WIDTH,
+                GifCreationService.GIF_FPS,
+                GifCreationService.MAX_CLIP_BYTES)));
     }
 
     private void updateClipTimes() {
@@ -672,10 +671,13 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void updateClipDuration() {
-        final float duration = getClipEndSec() - getClipStartSec();
-        dialogBinding.clipDurationText.setText(getString(R.string.gif_clip_duration, duration));
+        // the readout shows the requested length; a start near the video end
+        // makes the End readout show the silent clamp instead
+        dialogBinding.clipLengthText.setText(getString(R.string.clip_length_title) + " "
+                + ClipTimeUtils.formatClipTime(clipLengthSec));
+        final float effective = getClipEndSec() - getClipStartSec();
         dialogBinding.clipDurationWarning.setVisibility(
-                duration > WARN_CLIP_SECONDS ? View.VISIBLE : View.GONE);
+                effective > WARN_CLIP_SECONDS ? View.VISIBLE : View.GONE);
     }
 
     private void updateGifFileName() {
@@ -1161,17 +1163,9 @@ public class DownloadDialog extends DialogFragment
         final String mime = isGif ? "image/gif" : "image/webp";
         final String filename = getNameEditText().concat(isGif ? ".gif" : ".webp");
 
-        final int fps = isGif ? GifCreationService.GIF_FPS : GifCreationService.WEBP_FPS;
-        // no network on the UI thread: estimate with conservative fallback dims;
-        // the service re-checks with the real probed dimensions
-        final long estimatedBytes = ClipTimeUtils.estimateClipBytes(
-                endSec - startSec, GifCreationService.FALLBACK_PROBE_WIDTH,
-                GifCreationService.FALLBACK_PROBE_HEIGHT,
-                GifCreationService.OUTPUT_WIDTH, fps);
-        if (estimatedBytes > GifCreationService.MAX_CLIP_BYTES) {
-            Toast.makeText(context, R.string.gif_clip_too_long, Toast.LENGTH_LONG).show();
-            return;
-        }
+        // no size pre-check here: the service probes the real stream dimensions
+        // and enforces the memory budget itself — a fallback-dims estimate would
+        // wrongly reject long WebP clips of landscape sources
 
         final Intent intent = new Intent(context, GifCreationService.class);
         intent.putExtra(GifCreationService.EXTRA_STREAM_URL, streamUrl);

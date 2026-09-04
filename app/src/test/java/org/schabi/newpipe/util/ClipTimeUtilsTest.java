@@ -56,6 +56,32 @@ public class ClipTimeUtilsTest {
     }
 
     @Test
+    public void maxClipSecondsEstimateStaysWithinBudget() {
+        // grid over budgets and orientations: the returned duration is the largest
+        // 0.1 s step whose own estimate stays within the budget at every boundary
+        final long bytesPerFrame = 150L * 480 * 853 * 4;
+        final long budgetMb = (long) (1.6 * bytesPerFrame / (1024 * 1024));
+        assertTrue(ClipTimeUtils.estimateClipBytes(
+                ClipTimeUtils.maxClipSeconds(720, 1280, 480, 15f,
+                        budgetMb * 1024 * 1024),
+                720, 1280, 480, 15f) <= budgetMb * 1024 * 1024);
+        for (final int[] dims : new int[][]{{1280, 720}, {720, 1280}}) {
+            for (final float fps : new float[]{10f, 15f}) {
+                for (long budget = 1024L * 1024;
+                        budget <= 512L * 1024 * 1024;
+                        budget += 1024L * 1024) {
+                    final float maxSeconds = ClipTimeUtils.maxClipSeconds(
+                            dims[0], dims[1], 480, fps, budget);
+                    assertTrue("budget " + budget + " dims " + dims[0] + "x" + dims[1]
+                                    + " fps " + fps + " exceeded",
+                            ClipTimeUtils.estimateClipBytes(maxSeconds, dims[0], dims[1],
+                                    480, fps) <= budget);
+                }
+            }
+        }
+    }
+
+    @Test
     public void maxClipSecondsInvalidInput() {
         assertEquals(0.0f, ClipTimeUtils.maxClipSeconds(0, 1280, 480, 15f,
                 1024L), EPSILON);

@@ -74,8 +74,19 @@ public final class ClipTimeUtils {
         }
         final long bytesPerFrame = (long) targetWidth
                 * scaledHeight(videoWidth, videoHeight, targetWidth) * 4L;
-        final float seconds = (float) (budgetBytes / (double) bytesPerFrame / fps);
-        return (float) (Math.floor(seconds * 10f) / 10f);
+        final long frames = budgetBytes / bytesPerFrame;
+        if (frames <= 0L) {
+            return 0f;
+        }
+        // largest 0.1 s step whose ceil(duration * fps) frame count (the estimate's
+        // own rounding, in float) stays within the whole frames the budget can hold;
+        // the floor-to-step candidate can overshoot by one frame at a boundary, so
+        // verify against the same arithmetic estimateClipBytes uses and step back
+        float duration = (float) (Math.floor(frames / (double) fps * 10f) / 10f);
+        while (duration > 0f && (long) Math.ceil(duration * fps) > frames) {
+            duration = (float) (Math.floor((duration - 0.1f) * 10f) / 10f);
+        }
+        return duration;
     }
 
     private static int scaledHeight(final int videoWidth, final int videoHeight,
