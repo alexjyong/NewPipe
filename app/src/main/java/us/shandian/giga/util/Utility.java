@@ -2,8 +2,6 @@ package us.shandian.giga.util;
 
 import android.content.Context;
 import android.os.Build;
-import android.os.Environment;
-import android.os.StatFs;
 import android.util.Log;
 
 import androidx.annotation.ColorInt;
