@@ -160,8 +160,6 @@ public class DownloadDialog extends DialogFragment
     @State
     String pendingGifFormat;
     @State
-    String pendingGifFileName;
-    @State
     String pendingGifVideoTitle;
 
     private final ActivityResultLauncher<Intent> requestDownloadSaveAsLauncher =
@@ -1172,7 +1170,6 @@ public class DownloadDialog extends DialogFragment
         intent.putExtra(GifCreationService.EXTRA_START_MS, (long) (startSec * 1000));
         intent.putExtra(GifCreationService.EXTRA_END_MS, (long) (endSec * 1000));
         intent.putExtra(GifCreationService.EXTRA_FORMAT, isGif ? "gif" : "webp");
-        intent.putExtra(GifCreationService.EXTRA_FILE_NAME, filename);
         intent.putExtra(GifCreationService.EXTRA_VIDEO_TITLE, currentInfo.getName());
 
         prefs.edit().putString(getString(R.string.last_used_download_type),
@@ -1199,7 +1196,6 @@ public class DownloadDialog extends DialogFragment
         pendingGifStartMs = serviceIntent.getLongExtra(GifCreationService.EXTRA_START_MS, 0);
         pendingGifEndMs = serviceIntent.getLongExtra(GifCreationService.EXTRA_END_MS, 0);
         pendingGifFormat = serviceIntent.getStringExtra(GifCreationService.EXTRA_FORMAT);
-        pendingGifFileName = filename;
         pendingGifVideoTitle = serviceIntent.getStringExtra(GifCreationService.EXTRA_VIDEO_TITLE);
 
         final Uri initialPath;
@@ -1237,7 +1233,6 @@ public class DownloadDialog extends DialogFragment
         intent.putExtra(GifCreationService.EXTRA_START_MS, pendingGifStartMs);
         intent.putExtra(GifCreationService.EXTRA_END_MS, pendingGifEndMs);
         intent.putExtra(GifCreationService.EXTRA_FORMAT, pendingGifFormat);
-        intent.putExtra(GifCreationService.EXTRA_FILE_NAME, pendingGifFileName);
         intent.putExtra(GifCreationService.EXTRA_VIDEO_TITLE, pendingGifVideoTitle);
         intent.putExtra(GifCreationService.EXTRA_OUTPUT_URI, uri.toString());
 

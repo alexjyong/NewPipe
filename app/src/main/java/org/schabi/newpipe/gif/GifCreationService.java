@@ -45,7 +45,6 @@ public class GifCreationService extends Service {
     public static final String EXTRA_START_MS = "start_ms";
     public static final String EXTRA_END_MS = "end_ms";
     public static final String EXTRA_FORMAT = "format";
-    public static final String EXTRA_FILE_NAME = "file_name";
     public static final String EXTRA_VIDEO_TITLE = "video_title";
     public static final String EXTRA_OUTPUT_URI = "output_uri";
 
