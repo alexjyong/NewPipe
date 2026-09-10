@@ -13,6 +13,7 @@ import com.google.android.material.snackbar.Snackbar;
 import org.schabi.newpipe.R;
 
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Optional;
 
 import kotlin.Pair;
@@ -90,7 +91,7 @@ public class Deleter {
         final Optional<String> fileToBeDeleted = items.stream()
                 .filter(pair -> Boolean.TRUE.equals(pair.getSecond()))
                 .map(p -> p.getFirst().storage.getName())
-                .filter(name -> name != null)
+                .filter(Objects::nonNull)
                 .findFirst();
 
         String msg;

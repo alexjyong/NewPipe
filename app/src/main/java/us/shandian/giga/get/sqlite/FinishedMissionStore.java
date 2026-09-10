@@ -195,15 +195,16 @@ public class FinishedMissionStore extends SQLiteOpenHelper {
     }
 
     public void addFinishedMission(DownloadMission downloadMission) {
-        ContentValues values = getValuesOfMission(Objects.requireNonNull(downloadMission));
-        SQLiteDatabase database = getWritableDatabase();
-        database.insert(FINISHED_TABLE_NAME, null, values);
+        insertFinishedMission(Objects.requireNonNull(downloadMission));
     }
 
     public void addFinishedMission(@NonNull final FinishedMission mission) {
+        insertFinishedMission(mission);
+    }
+
+    private void insertFinishedMission(@NonNull final Mission mission) {
         final ContentValues values = getValuesOfMission(mission);
-        final SQLiteDatabase database = getWritableDatabase();
-        database.insert(FINISHED_TABLE_NAME, null, values);
+        getWritableDatabase().insert(FINISHED_TABLE_NAME, null, values);
     }
 
     public void deleteMission(Mission mission) {

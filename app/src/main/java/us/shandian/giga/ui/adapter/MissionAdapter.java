@@ -388,36 +388,22 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
     }
 
     private void openFileViaCache(Mission mission, String mimeType) {
-        try {
-            final Uri safUri = mission.storage.getUri();
-            final File cacheFile = newCacheCopyFile(mission.storage.getName());
+        compositeDisposable.add(
+                Observable.fromCallable(() -> copyToCache(mission))
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(fileUri -> {
+                            Intent viewIntent = new Intent(Intent.ACTION_VIEW);
+                            viewIntent.setDataAndType(fileUri, mimeType);
+                            viewIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
 
-            try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
-                 OutputStream os = new FileOutputStream(cacheFile)) {
-                if (is == null) {
-                    Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                is.transferTo(os);
-            }
+                            Intent chooserIntent = createChooser(viewIntent, null);
+                            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                                    | FLAG_GRANT_READ_URI_PERMISSION);
 
-            final Uri fileUri = FileProvider.getUriForFile(
-                    mContext,
-                    BuildConfig.APPLICATION_ID + ".provider",
-                    cacheFile);
-
-            Intent viewIntent = new Intent(Intent.ACTION_VIEW);
-            viewIntent.setDataAndType(fileUri, mimeType);
-            viewIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
-
-            Intent chooserIntent = createChooser(viewIntent, null);
-            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | FLAG_GRANT_READ_URI_PERMISSION);
-
-            ShareUtils.openIntentInApp(mContext, chooserIntent);
-        } catch (IOException | IllegalArgumentException e) {
-            Log.e(TAG, "Failed to open file via cache fallback", e);
-            Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
-        }
+                            ShareUtils.openIntentInApp(mContext, chooserIntent);
+                        }, e -> onCacheCopyFailed("open", e))
+        );
     }
 
     private void shareFile(Mission mission) {
@@ -446,41 +432,54 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
     }
 
     private void shareFileViaCache(Mission mission) {
-        try {
-            final Uri safUri = mission.storage.getUri();
-            final File cacheFile = newCacheCopyFile(mission.storage.getName());
+        compositeDisposable.add(
+                Observable.fromCallable(() -> copyToCache(mission))
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(fileUri -> {
+                            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                            shareIntent.setType(resolveMimeType(mission));
+                            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+                            shareIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
 
-            try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
-                 OutputStream os = new FileOutputStream(cacheFile)) {
-                if (is == null) {
-                    Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                is.transferTo(os);
+                            Intent intent = createChooser(shareIntent, null);
+                            // unneeded to set a title to the chooser on Android P and higher
+                            // because the system ignores this title on these versions
+                            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1) {
+                                intent.putExtra(Intent.EXTRA_TITLE,
+                                        mContext.getString(R.string.share_dialog_title));
+                            }
+                            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+                            intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+                            mContext.startActivity(intent);
+                        }, e -> onCacheCopyFailed("share", e))
+        );
+    }
+
+    /**
+     * Copies the mission's SAF file into the app cache. Blocking call —
+     * must be invoked from a background thread (see the io() subscriptions above).
+     */
+    private Uri copyToCache(Mission mission) throws IOException {
+        final Uri safUri = mission.storage.getUri();
+        final File cacheFile = newCacheCopyFile(mission.storage.getName());
+
+        try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
+             OutputStream os = new FileOutputStream(cacheFile)) {
+            if (is == null) {
+                throw new IOException("Could not open stream for " + safUri);
             }
-
-            final Uri fileUri = FileProvider.getUriForFile(
-                    mContext,
-                    BuildConfig.APPLICATION_ID + ".provider",
-                    cacheFile);
-
-            final Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType(resolveMimeType(mission));
-            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
-            shareIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
-
-            final Intent intent = createChooser(shareIntent, null);
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1) {
-                intent.putExtra(Intent.EXTRA_TITLE, mContext.getString(R.string.share_dialog_title));
-            }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
-
-            mContext.startActivity(intent);
-        } catch (IOException | IllegalArgumentException e) {
-            Log.e(TAG, "Failed to share file via cache fallback", e);
-            Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
+            is.transferTo(os);
         }
+
+        return FileProvider.getUriForFile(mContext,
+                BuildConfig.APPLICATION_ID + ".provider", cacheFile);
+    }
+
+    private void onCacheCopyFailed(final String action, final Throwable e) {
+        Log.e(TAG, "Failed to copy SAF file to cache for " + action, e);
+        Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
     }
 
     /**
