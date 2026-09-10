@@ -203,7 +203,7 @@ public class GifCreationService extends Service {
 
         final StoredFileHelper file = new StoredFileHelper(
                 this, Uri.parse(outputUri), mimeType);
-        try (SharpStream stream = file.getStream()) {
+        try (SharpStream stream = file.openAndTruncateStream()) {
             stream.write(data);
         }
     }

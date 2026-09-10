@@ -1178,15 +1178,57 @@ public class DownloadDialog extends DialogFragment
         // GIF output goes to the video download folder, same as regular video downloads
         if (!askForSavePath && mainStorageVideo != null
                 && !mainStorageVideo.isInvalidSafStorage()) {
-            final StoredFileHelper file = mainStorageVideo.createFile(filename, mime);
-            if (file != null && file.canWrite()) {
-                intent.putExtra(GifCreationService.EXTRA_OUTPUT_URI, file.getUri().toString());
-                launchGifService(intent, isGif);
-                return;
-            }
+            checkGifOverwrite(intent, isGif, filename, mime);
+            return;
         }
 
         launchGifPicker(intent, filename, mime);
+    }
+
+    private void checkGifOverwrite(final Intent intent, final boolean isGif,
+                                   final String filename, final String mime) {
+        final StoredFileHelper candidate;
+        try {
+            candidate = new StoredFileHelper(mainStorageVideo.getUri(), filename, mime,
+                    mainStorageVideo.getTag());
+        } catch (final Exception e) {
+            ErrorUtil.createNotification(requireContext(),
+                    new ErrorInfo(e, UserAction.DOWNLOAD_FAILED, "Getting storage"));
+            return;
+        }
+
+        final MissionState state = downloadManager == null
+                ? MissionState.None : downloadManager.checkForExistingMission(candidate);
+        final boolean fileExists = mainStorageVideo.fileExists(filename);
+        if (state == MissionState.None && !fileExists) {
+            continueGifCreation(intent, isGif, filename, mime);
+            return;
+        }
+
+        final AlertDialog.Builder askDialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.download_dialog_title)
+                .setMessage(state == MissionState.Pending
+                        ? R.string.download_already_pending : R.string.overwrite_finished_warning)
+                .setNegativeButton(R.string.cancel, null);
+        askDialog.setPositiveButton(R.string.overwrite, (dialog, which) -> {
+            dialog.dismiss();
+            if (downloadManager != null && state != MissionState.None) {
+                downloadManager.forgetMission(candidate);
+            }
+            continueGifCreation(intent, isGif, filename, mime);
+        });
+        askDialog.show();
+    }
+
+    private void continueGifCreation(final Intent intent, final boolean isGif,
+                                     final String filename, final String mime) {
+        final StoredFileHelper file = mainStorageVideo.createFile(filename, mime);
+        if (file == null || !file.canWrite()) {
+            showFailedDialog(R.string.error_file_creation);
+            return;
+        }
+        intent.putExtra(GifCreationService.EXTRA_OUTPUT_URI, file.getUri().toString());
+        launchGifService(intent, isGif);
     }
 
     private void launchGifPicker(final Intent serviceIntent, final String filename,
