@@ -47,6 +47,7 @@ import com.google.android.exoplayer2.video.VideoSize;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.PlayerBinding;
+import org.schabi.newpipe.download.DownloadDialog;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamSegment;
 import org.schabi.newpipe.fragments.OnScrollBelowItemsListener;
@@ -172,6 +173,18 @@ public final class MainPlayerUi extends VideoPlayerUi implements View.OnLayoutCh
                 getParentActivity().map(FragmentActivity::getSupportFragmentManager)
                         .ifPresent(fragmentManager ->
                                 PlaylistDialog.showForPlayQueue(player, fragmentManager)));
+
+        binding.gifCreationButton.setOnClickListener(makeOnClickListener(() ->
+                player.getCurrentStreamInfo().ifPresent(info -> {
+                    final long positionMs = player.getExoPlayer() != null
+                            ? player.getExoPlayer().getCurrentPosition() : 0;
+                    getParentActivity().ifPresent(activity -> {
+                        // shortcut into the download dialog's GIF/WebP tab
+                        final DownloadDialog dialog =
+                                new DownloadDialog(activity, info, positionMs, true);
+                        dialog.show(activity.getSupportFragmentManager(), "downloadDialog");
+                    });
+                })));
 
         settingsContentObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override

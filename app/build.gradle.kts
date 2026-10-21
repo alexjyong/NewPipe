@@ -147,6 +147,13 @@ ksp {
 // Custom dependency configuration for ktlint
 val ktlint by configurations.creating
 
+// https://checkstyle.org/#JRE_and_JDK
+tasks.withType<Checkstyle>().configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 checkstyle {
     configDirectory = rootProject.file("checkstyle")
     isIgnoreFailures = false
@@ -265,6 +272,11 @@ dependencies {
 
     // HTML parser
     implementation(libs.jsoup)
+
+    // GIF encoding
+    implementation(libs.glide.gifencoder) {
+        exclude(group = "com.github.bumptech.glide", module = "glide")
+    }
 
     // HTTP client
     implementation(libs.squareup.okhttp)

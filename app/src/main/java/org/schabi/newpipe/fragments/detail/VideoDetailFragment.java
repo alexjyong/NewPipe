@@ -1710,7 +1710,9 @@ public final class VideoDetailFragment
         }
 
         try {
-            final DownloadDialog downloadDialog = new DownloadDialog(activity, currentInfo);
+            final DownloadDialog downloadDialog = new DownloadDialog(activity, currentInfo,
+                    player != null && player.getExoPlayer() != null
+                            ? player.getExoPlayer().getCurrentPosition() : 0L, false);
             downloadDialog.show(activity.getSupportFragmentManager(), "downloadDialog");
         } catch (final Exception e) {
             ErrorUtil.showSnackbar(activity, new ErrorInfo(e, UserAction.DOWNLOAD_OPEN_DIALOG,

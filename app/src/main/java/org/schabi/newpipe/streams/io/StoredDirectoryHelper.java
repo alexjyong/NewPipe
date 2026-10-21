@@ -167,6 +167,11 @@ public class StoredDirectoryHelper {
         return docTree == null ? Files.exists(ioTree) : docTree.exists();
     }
 
+    public boolean fileExists(final String filename) {
+        return docTree == null ? Files.exists(ioTree.resolve(filename))
+                : docTree.findFile(filename) != null;
+    }
+
     /**
      * Indicates whether it's using the {@code java.io} API.
      *

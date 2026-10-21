@@ -69,9 +69,14 @@ import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Date;
 import java.util.Locale;
@@ -361,7 +366,44 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         chooserIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
         chooserIntent.addFlags(FLAG_GRANT_PREFIX_URI_PERMISSION);
 
-        ShareUtils.openIntentInApp(mContext, chooserIntent);
+        try {
+            ShareUtils.openIntentInApp(mContext, chooserIntent);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Lost URI permission for SAF file, falling back to cache copy", e);
+            openFileViaCache(mission, mimeType);
+        }
+    }
+
+    private File newCacheCopyFile(final String name) {
+        final File dir = new File(mContext.getCacheDir(), "saf_copies");
+        final File[] existing = dir.listFiles();
+        if (existing != null && existing.length >= 16) {
+            Arrays.sort(existing, Comparator.comparingLong(File::lastModified).reversed());
+            for (int i = 15; i < existing.length; i++) {
+                existing[i].delete();
+            }
+        }
+        dir.mkdirs();
+        return new File(dir, name);
+    }
+
+    private void openFileViaCache(Mission mission, String mimeType) {
+        compositeDisposable.add(
+                Observable.fromCallable(() -> copyToCache(mission))
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(fileUri -> {
+                            Intent viewIntent = new Intent(Intent.ACTION_VIEW);
+                            viewIntent.setDataAndType(fileUri, mimeType);
+                            viewIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+                            Intent chooserIntent = createChooser(viewIntent, null);
+                            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                                    | FLAG_GRANT_READ_URI_PERMISSION);
+
+                            ShareUtils.openIntentInApp(mContext, chooserIntent);
+                        }, e -> onCacheCopyFailed("open", e))
+        );
     }
 
     private void shareFile(Mission mission) {
@@ -381,7 +423,63 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
         intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
 
-        mContext.startActivity(intent);
+        try {
+            mContext.startActivity(intent);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Lost URI permission for SAF file during share, falling back to cache", e);
+            shareFileViaCache(mission);
+        }
+    }
+
+    private void shareFileViaCache(Mission mission) {
+        compositeDisposable.add(
+                Observable.fromCallable(() -> copyToCache(mission))
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(fileUri -> {
+                            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                            shareIntent.setType(resolveMimeType(mission));
+                            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+                            shareIntent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+                            Intent intent = createChooser(shareIntent, null);
+                            // unneeded to set a title to the chooser on Android P and higher
+                            // because the system ignores this title on these versions
+                            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1) {
+                                intent.putExtra(Intent.EXTRA_TITLE,
+                                        mContext.getString(R.string.share_dialog_title));
+                            }
+                            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+                            intent.addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+
+                            mContext.startActivity(intent);
+                        }, e -> onCacheCopyFailed("share", e))
+        );
+    }
+
+    /**
+     * Copies the mission's SAF file into the app cache. Blocking call —
+     * must be invoked from a background thread (see the io() subscriptions above).
+     */
+    private Uri copyToCache(Mission mission) throws IOException {
+        final Uri safUri = mission.storage.getUri();
+        final File cacheFile = newCacheCopyFile(mission.storage.getName());
+
+        try (InputStream is = mContext.getContentResolver().openInputStream(safUri);
+             OutputStream os = new FileOutputStream(cacheFile)) {
+            if (is == null) {
+                throw new IOException("Could not open stream for " + safUri);
+            }
+            is.transferTo(os);
+        }
+
+        return FileProvider.getUriForFile(mContext,
+                BuildConfig.APPLICATION_ID + ".provider", cacheFile);
+    }
+
+    private void onCacheCopyFailed(final String action, final Throwable e) {
+        Log.e(TAG, "Failed to copy SAF file to cache for " + action, e);
+        Toast.makeText(mContext, R.string.general_error, Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -440,6 +538,9 @@ public class MissionAdapter extends Adapter<ViewHolder> implements Handler.Callb
         }
 
         switch (msg.what) {
+            case DownloadManagerService.MESSAGE_FINISHED_ADDED:
+                applyChanges();
+                return true;
             case DownloadManagerService.MESSAGE_ERROR:
             case DownloadManagerService.MESSAGE_FINISHED:
             case DownloadManagerService.MESSAGE_DELETED:

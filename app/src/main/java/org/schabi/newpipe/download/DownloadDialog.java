@@ -34,11 +34,13 @@ import androidx.annotation.StringRes;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.collection.SparseArrayCompat;
+import androidx.core.content.ContextCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.PreferenceManager;
 
 import com.evernote.android.state.State;
+import com.google.android.material.slider.Slider;
 import com.livefront.bridge.Bridge;
 import com.nononsenseapps.filepicker.Utils;
 
@@ -56,12 +58,14 @@ import org.schabi.newpipe.extractor.stream.Stream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
+import org.schabi.newpipe.gif.GifCreationService;
 import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.streams.io.NoFileManagerSafeGuard;
 import org.schabi.newpipe.streams.io.StoredDirectoryHelper;
 import org.schabi.newpipe.streams.io.StoredFileHelper;
 import org.schabi.newpipe.util.AudioTrackAdapter;
 import org.schabi.newpipe.util.AudioTrackAdapter.AudioTracksWrapper;
+import org.schabi.newpipe.util.ClipTimeUtils;
 import org.schabi.newpipe.util.FilePickerActivityHelper;
 import org.schabi.newpipe.util.FilenameUtils;
 import org.schabi.newpipe.util.ListHelper;
@@ -93,6 +97,9 @@ public class DownloadDialog extends DialogFragment
     private static final String TAG = "DialogFragment";
     private static final boolean DEBUG = MainActivity.DEBUG;
 
+    private static final int WARN_CLIP_SECONDS = 10;
+    private static final int DEFAULT_CLIP_SECONDS = 5;
+
     @State
     StreamInfo currentInfo;
     @State
@@ -109,6 +116,10 @@ public class DownloadDialog extends DialogFragment
     int selectedAudioIndex = 0; // default to the first item
     @State
     int selectedSubtitleIndex = 0; // default to the first item
+    @State
+    long clipStartPositionMs = 0; // set in the constructor, seeds the GIF clip range
+    @State
+    boolean startOnGifTab = false; // set in the constructor
 
     private StoredDirectoryHelper mainStorageAudio = null;
     private StoredDirectoryHelper mainStorageVideo = null;
@@ -132,6 +143,25 @@ public class DownloadDialog extends DialogFragment
     private String filenameTmp;
     private String mimeTmp;
 
+    private int clipDurationSeconds;
+    private float clipLengthSec = DEFAULT_CLIP_SECONDS;
+    // last auto-generated clip filename, so we can tell an untouched name from an edited one.
+    // not @State on purpose: after recreation it's null and a restored name is left alone
+    private String lastGeneratedGifName;
+
+    @State
+    boolean pendingGifActive = false;
+    @State
+    String pendingGifStreamUrl;
+    @State
+    long pendingGifStartMs;
+    @State
+    long pendingGifEndMs;
+    @State
+    String pendingGifFormat;
+    @State
+    String pendingGifVideoTitle;
+
     private final ActivityResultLauncher<Intent> requestDownloadSaveAsLauncher =
             registerForActivityResult(
                     new StartActivityForResult(), this::requestDownloadSaveAsResult);
@@ -141,6 +171,9 @@ public class DownloadDialog extends DialogFragment
     private final ActivityResultLauncher<Intent> requestDownloadPickVideoFolderLauncher =
             registerForActivityResult(
                     new StartActivityForResult(), this::requestDownloadPickVideoFolderResult);
+    private final ActivityResultLauncher<Intent> requestGifSaveAsLauncher =
+            registerForActivityResult(
+                    new StartActivityForResult(), this::requestGifSaveAsResult);
 
     /*//////////////////////////////////////////////////////////////////////////
     // Instance creation
@@ -161,7 +194,23 @@ public class DownloadDialog extends DialogFragment
      * @param info    the info from which to obtain downloadable streams and other info (e.g. title)
      */
     public DownloadDialog(@NonNull final Context context, @NonNull final StreamInfo info) {
+        this(context, info, 0L, false);
+    }
+
+    /**
+     * Same as {@link #DownloadDialog(Context, StreamInfo)}, but allows opening the dialog
+     * directly on the GIF/WebP tab with the clip range seeded from the playback position.
+     *
+     * @param context     the context to use just to obtain preferences and strings
+     * @param info        the info from which to obtain downloadable streams and other info
+     * @param clipStartMs playback position in milliseconds used as the clip start, or 0
+     * @param openGifTab  whether to preselect the GIF/WebP tab
+     */
+    public DownloadDialog(@NonNull final Context context, @NonNull final StreamInfo info,
+                          final long clipStartMs, final boolean openGifTab) {
         this.currentInfo = info;
+        this.clipStartPositionMs = clipStartMs;
+        this.startOnGifTab = openGifTab;
 
         final List<AudioStream> audioStreams =
                 getStreamsOfSpecifiedDelivery(info.getAudioStreams(), PROGRESSIVE_HTTP);
@@ -311,6 +360,7 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.videoAudioGroup.setOnCheckedChangeListener(this);
 
         initToolbar(dialogBinding.toolbarLayout.toolbar);
+        initClipPanel();
         setupDownloadOptions();
 
         prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
@@ -419,11 +469,53 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.audioTrackSpinner.setSelection(selectedAudioTrackIndex);
     }
 
+    private void setClipPanelVisible(final boolean visible) {
+        dialogBinding.clipLayout.setVisibility(visible ? View.VISIBLE : View.GONE);
+
+        final int streamViews = visible ? View.GONE : View.VISIBLE;
+        dialogBinding.threadsTextView.setVisibility(streamViews);
+        dialogBinding.threadsLayout.setVisibility(streamViews);
+        dialogBinding.streamsNote.setVisibility(streamViews);
+
+        if (!visible && isGeneratedGifNameInField()) {
+            // leaving the GIF tab: undo the generated clip name, unless the user edited it
+            lastGeneratedGifName = null;
+            dialogBinding.fileName.setText(
+                    FilenameUtils.createFilename(context, currentInfo.getName()));
+        }
+    }
+
+    private void setupGifPanel() {
+        if (getContext() == null) {
+            return;
+        }
+
+        setClipPanelVisible(true);
+        setRadioButtonsState(true);
+        dialogBinding.qualitySpinner.setVisibility(View.GONE);
+        dialogBinding.audioStreamSpinner.setVisibility(View.GONE);
+        dialogBinding.audioTrackSpinner.setVisibility(View.GONE);
+        dialogBinding.audioTrackPresentInVideoText.setVisibility(View.GONE);
+
+        // only generate a clip name if the field was not edited by the user
+        if (shouldAutoGenerateClipName()) {
+            updateGifFileName();
+        }
+    }
+
+    private boolean shouldAutoGenerateClipName() {
+        final String plainName = FilenameUtils.createFilename(context, currentInfo.getName());
+        final String current = Objects.requireNonNullElse(
+                dialogBinding.fileName.getText(), "").toString();
+        return current.isEmpty() || current.equals(plainName) || isGeneratedGifNameInField();
+    }
+
     private void setupAudioSpinner() {
         if (getContext() == null) {
             return;
         }
 
+        setClipPanelVisible(false);
         dialogBinding.qualitySpinner.setVisibility(View.GONE);
         setRadioButtonsState(true);
         dialogBinding.audioStreamSpinner.setAdapter(audioStreamsAdapter);
@@ -439,6 +531,7 @@ public class DownloadDialog extends DialogFragment
             return;
         }
 
+        setClipPanelVisible(false);
         dialogBinding.qualitySpinner.setAdapter(videoStreamsAdapter);
         dialogBinding.qualitySpinner.setSelection(selectedVideoIndex);
         dialogBinding.qualitySpinner.setVisibility(View.VISIBLE);
@@ -461,6 +554,7 @@ public class DownloadDialog extends DialogFragment
             return;
         }
 
+        setClipPanelVisible(false);
         dialogBinding.qualitySpinner.setAdapter(subtitleStreamsAdapter);
         dialogBinding.qualitySpinner.setSelection(selectedSubtitleIndex);
         dialogBinding.qualitySpinner.setVisibility(View.VISIBLE);
@@ -468,6 +562,171 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.audioStreamSpinner.setVisibility(View.GONE);
         dialogBinding.audioTrackSpinner.setVisibility(View.GONE);
         dialogBinding.audioTrackPresentInVideoText.setVisibility(View.GONE);
+    }
+
+
+    /*//////////////////////////////////////////////////////////////////////////
+    // GIF/WebP clip panel
+    //////////////////////////////////////////////////////////////////////////*/
+
+    private void initClipPanel() {
+        clipDurationSeconds = (int) currentInfo.getDuration();
+        final int maxDuration = Math.max(clipDurationSeconds, 1);
+
+        // clamp start so there's always room for 0.1s after it, and round to the slider's
+        // 0.1 step size, else setValue() throws on non-multiple values
+        final float startSec = Math.round(
+                Math.min(clipStartPositionMs / 1000f, maxDuration - 0.1f) * 10f) / 10f;
+
+        dialogBinding.clipStartSlider.setValueFrom(0f);
+        dialogBinding.clipStartSlider.setValueTo(maxDuration);
+        dialogBinding.clipStartSlider.setValue(Math.max(startSec, 0f));
+        dialogBinding.clipStartSlider.setLabelFormatter(
+                value -> ClipTimeUtils.formatClipTime(value));
+
+        // attached after setValue() so seeding the slider doesn't fire it
+        dialogBinding.clipStartSlider.addOnChangeListener((slider, value, fromUser) -> {
+            updateClipTimes();
+            updateClipDuration();
+            if (shouldAutoGenerateClipName()) {
+                updateGifFileName();
+            }
+        });
+
+        nudgeClipStart(dialogBinding.clipNudgeBackLong, -1.0f);
+        nudgeClipStart(dialogBinding.clipNudgeBack, -0.1f);
+        nudgeClipStart(dialogBinding.clipNudgeForward, 0.1f);
+        nudgeClipStart(dialogBinding.clipNudgeForwardLong, 1.0f);
+
+        setupLengthSlider();
+
+        updateClipTimes();
+        updateClipDuration();
+    }
+
+    private float getClipStartSec() {
+        return dialogBinding.clipStartSlider.getValue();
+    }
+
+    private float getClipEndSec() {
+        return Math.min(getClipStartSec() + clipLengthSec, clipDurationSeconds);
+    }
+
+    private void nudgeClipStart(final View button, final float deltaSeconds) {
+        button.setOnClickListener(v -> {
+            final Slider slider = dialogBinding.clipStartSlider;
+            final float nudged = Math.round(
+                    Math.max(0f, Math.min(slider.getValueTo(),
+                            slider.getValue() + deltaSeconds)) * 10f) / 10f;
+            if (nudged != slider.getValue()) {
+                slider.setValue(nudged);
+            }
+        });
+    }
+
+    private void setupLengthSlider() {
+        final Slider slider = dialogBinding.clipLengthSlider;
+        slider.setValueFrom(0.1f);
+        slider.setValueTo(lengthCapSec());
+        slider.setValue(Math.max(0.1f, Math.min(snapToStepSec(clipLengthSec),
+                slider.getValueTo())));
+        slider.setLabelFormatter(value -> ClipTimeUtils.formatClipTime(value));
+
+        // attached after setValue() so seeding the slider doesn't fire it
+        slider.addOnChangeListener((s, value, fromUser) -> {
+            clipLengthSec = snapToStepSec(value);
+            updateClipTimes();
+            updateClipDuration();
+            if (shouldAutoGenerateClipName()) {
+                updateGifFileName();
+            }
+        });
+    }
+
+    private static float snapToStepSec(final float seconds) {
+        // Slider throws unless (value - valueFrom) is an exact multiple of
+        // stepSize 0.1; float differences are not, so round them onto the grid
+        return (float) (Math.round(seconds * 10f) / 10.0);
+    }
+
+    private float lengthCapSec() {
+        // memory budget at the fallback dims and GIF's 10 fps: one fixed track
+        // for both formats. WebP lengths beyond its 15 fps budget are rejected
+        // by the service's real-dimensions re-check, not by this track
+        return Math.max(0.1f, snapToStepSec(ClipTimeUtils.maxClipSeconds(
+                GifCreationService.FALLBACK_PROBE_WIDTH,
+                GifCreationService.FALLBACK_PROBE_HEIGHT,
+                GifCreationService.OUTPUT_WIDTH,
+                GifCreationService.GIF_FPS,
+                GifCreationService.MAX_CLIP_BYTES)));
+    }
+
+    private void updateClipTimes() {
+        dialogBinding.clipStartText.setText(getString(R.string.gif_start_time) + " "
+                + ClipTimeUtils.formatClipTime(getClipStartSec()));
+        dialogBinding.clipEndText.setText(getString(R.string.gif_end_time) + " "
+                + ClipTimeUtils.formatClipTime(getClipEndSec()));
+    }
+
+    private void updateClipDuration() {
+        // the readout shows the requested length; a start near the video end
+        // makes the End readout show the silent clamp instead
+        dialogBinding.clipLengthText.setText(getString(R.string.clip_length_title) + " "
+                + ClipTimeUtils.formatClipTime(clipLengthSec));
+        final float effective = getClipEndSec() - getClipStartSec();
+        dialogBinding.clipDurationWarning.setVisibility(
+                effective > WARN_CLIP_SECONDS ? View.VISIBLE : View.GONE);
+    }
+
+    private void updateGifFileName() {
+        final String title = currentInfo.getName().replaceAll("[^a-zA-Z0-9._-]", "_");
+        final String name = String.format(Locale.US, "%s_%s-%s",
+                ClipTimeUtils.truncateName(title, 50),
+                ClipTimeUtils.formatClipTime(getClipStartSec()).replaceAll("[^0-9]", ""),
+                ClipTimeUtils.formatClipTime(getClipEndSec()).replaceAll("[^0-9]", ""));
+        lastGeneratedGifName = name;
+        dialogBinding.fileName.setText(name);
+    }
+
+    private boolean isGeneratedGifNameInField() {
+        return lastGeneratedGifName != null && lastGeneratedGifName.contentEquals(
+                Objects.requireNonNullElse(dialogBinding.fileName.getText(), ""));
+    }
+
+    /**
+     * @return progressive HTTP video streams usable for GIF frames: muxed ones first, then
+     *         video-only ones, since YouTube no longer returns muxed streams
+     */
+    private List<VideoStream> getGifVideoStreams() {
+        final List<VideoStream> streams = new ArrayList<>(
+                getStreamsOfSpecifiedDelivery(currentInfo.getVideoStreams(), PROGRESSIVE_HTTP));
+        streams.addAll(
+                getStreamsOfSpecifiedDelivery(currentInfo.getVideoOnlyStreams(), PROGRESSIVE_HTTP));
+        return streams;
+    }
+
+    /**
+     * @return the URL of a progressive HTTP video stream suitable for frame extraction,
+     *         preferring one at or below 720p, or null if there is none
+     */
+    @Nullable
+    private String getGifStreamUrl() {
+        final List<VideoStream> videoStreams = getGifVideoStreams();
+        if (videoStreams.isEmpty()) {
+            return null;
+        }
+        for (final VideoStream stream : videoStreams) {
+            try {
+                final int height = Integer.parseInt(
+                        stream.getResolution().replaceAll("[^0-9]", ""));
+                if (height <= 720) {
+                    return stream.getContent();
+                }
+            } catch (final NumberFormatException ignored) {
+                // resolution string was not parseable, try the next stream
+            }
+        }
+        return videoStreams.get(videoStreams.size() - 1).getContent();
     }
 
 
@@ -565,6 +824,9 @@ public class DownloadDialog extends DialogFragment
         } else if (checkedId == R.id.subtitle_button) {
             setupSubtitleSpinner();
             flag = false;
+        } else if (checkedId == R.id.gif_button) {
+            setupGifPanel();
+            flag = false;
         }
 
         dialogBinding.threads.setEnabled(flag);
@@ -605,6 +867,11 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void onItemSelectedSetFileName() {
+        if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+            // the GIF tab owns the file name field, spinner events must not overwrite it
+            return;
+        }
+
         final String fileName = FilenameUtils.createFilename(getContext(), currentInfo.getName());
         final String prevFileName = Optional.ofNullable(dialogBinding.fileName.getText())
                 .map(Object::toString)
@@ -649,6 +916,8 @@ public class DownloadDialog extends DialogFragment
         final boolean isVideoStreamsAvailable = videoStreamsAdapter.getCount() > 0;
         final boolean isAudioStreamsAvailable = audioStreamsAdapter.getCount() > 0;
         final boolean isSubtitleStreamsAvailable = subtitleStreamsAdapter.getCount() > 0;
+        // GIF frames are extracted from a progressive HTTP video stream
+        final boolean isGifAvailable = !getGifVideoStreams().isEmpty();
 
         dialogBinding.audioButton.setVisibility(isAudioStreamsAvailable ? View.VISIBLE
                 : View.GONE);
@@ -656,10 +925,17 @@ public class DownloadDialog extends DialogFragment
                 : View.GONE);
         dialogBinding.subtitleButton.setVisibility(isSubtitleStreamsAvailable
                 ? View.VISIBLE : View.GONE);
+        dialogBinding.gifButton.setVisibility(isGifAvailable ? View.VISIBLE : View.GONE);
 
         prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
         final String defaultMedia = prefs.getString(getString(R.string.last_used_download_type),
                 getString(R.string.last_download_type_video_key));
+
+        if (startOnGifTab && isGifAvailable) {
+            dialogBinding.gifButton.setChecked(true);
+            setupGifPanel();
+            return;
+        }
 
         if (isVideoStreamsAvailable
                 && (defaultMedia.equals(getString(R.string.last_download_type_video_key)))) {
@@ -673,6 +949,10 @@ public class DownloadDialog extends DialogFragment
                 && (defaultMedia.equals(getString(R.string.last_download_type_subtitle_key)))) {
             dialogBinding.subtitleButton.setChecked(true);
             setupSubtitleSpinner();
+        } else if (isGifAvailable
+                && (defaultMedia.equals(getString(R.string.last_download_type_gif_key)))) {
+            dialogBinding.gifButton.setChecked(true);
+            setupGifPanel();
         } else if (isVideoStreamsAvailable) {
             dialogBinding.videoButton.setChecked(true);
             setupVideoSpinner();
@@ -693,6 +973,7 @@ public class DownloadDialog extends DialogFragment
         dialogBinding.audioButton.setEnabled(enabled);
         dialogBinding.videoButton.setEnabled(enabled);
         dialogBinding.subtitleButton.setEnabled(enabled);
+        dialogBinding.gifButton.setEnabled(enabled);
     }
 
     private StreamInfoWrapper<AudioStream> getWrappedAudioStreams() {
@@ -750,6 +1031,11 @@ public class DownloadDialog extends DialogFragment
     }
 
     private void prepareSelectedDownload() {
+        if (dialogBinding.videoAudioGroup.getCheckedRadioButtonId() == R.id.gif_button) {
+            prepareGifCreation();
+            return;
+        }
+
         final StoredDirectoryHelper mainStorage;
         final MediaFormat format;
         final String selectedMediaType;
@@ -863,6 +1149,156 @@ public class DownloadDialog extends DialogFragment
         // remember the last media type downloaded by the user
         prefs.edit().putString(getString(R.string.last_used_download_type), selectedMediaType)
                 .apply();
+    }
+
+    private void prepareGifCreation() {
+        final float startSec = getClipStartSec();
+        final float endSec = getClipEndSec();
+
+        if (endSec - startSec < 0.1f) {
+            Toast.makeText(context, R.string.gif_time_range_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final String streamUrl = getGifStreamUrl();
+        if (streamUrl == null) {
+            Toast.makeText(context, R.string.no_streams_available_download,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final boolean isGif = dialogBinding.formatGroup.getCheckedButtonId() == R.id.format_gif;
+        final String mime = isGif ? "image/gif" : "image/webp";
+        final String filename = getNameEditText().concat(isGif ? ".gif" : ".webp");
+
+        // no size pre-check here: the service probes the real stream dimensions
+        // and enforces the memory budget itself — a fallback-dims estimate would
+        // wrongly reject long WebP clips of landscape sources
+
+        final Intent intent = new Intent(context, GifCreationService.class);
+        intent.putExtra(GifCreationService.EXTRA_STREAM_URL, streamUrl);
+        intent.putExtra(GifCreationService.EXTRA_START_MS, (long) (startSec * 1000));
+        intent.putExtra(GifCreationService.EXTRA_END_MS, (long) (endSec * 1000));
+        intent.putExtra(GifCreationService.EXTRA_FORMAT, isGif ? "gif" : "webp");
+        intent.putExtra(GifCreationService.EXTRA_VIDEO_TITLE, currentInfo.getName());
+
+        prefs.edit().putString(getString(R.string.last_used_download_type),
+                getString(R.string.last_download_type_gif_key)).apply();
+
+        // GIF output goes to the video download folder, same as regular video downloads
+        if (!askForSavePath && mainStorageVideo != null
+                && !mainStorageVideo.isInvalidSafStorage()) {
+            checkGifOverwrite(intent, isGif, filename, mime);
+            return;
+        }
+
+        launchGifPicker(intent, filename, mime);
+    }
+
+    private void checkGifOverwrite(final Intent intent, final boolean isGif,
+                                   final String filename, final String mime) {
+        final StoredFileHelper candidate;
+        try {
+            candidate = new StoredFileHelper(mainStorageVideo.getUri(), filename, mime,
+                    mainStorageVideo.getTag());
+        } catch (final Exception e) {
+            ErrorUtil.createNotification(requireContext(),
+                    new ErrorInfo(e, UserAction.DOWNLOAD_FAILED, "Getting storage"));
+            return;
+        }
+
+        final MissionState state = downloadManager == null
+                ? MissionState.None : downloadManager.checkForExistingMission(candidate);
+        final boolean fileExists = mainStorageVideo.fileExists(filename);
+        if (state == MissionState.None && !fileExists) {
+            continueGifCreation(intent, isGif, filename, mime);
+            return;
+        }
+
+        final AlertDialog.Builder askDialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.download_dialog_title)
+                .setMessage(state == MissionState.Pending
+                        ? R.string.download_already_pending : R.string.overwrite_finished_warning)
+                .setNegativeButton(R.string.cancel, null);
+        askDialog.setPositiveButton(R.string.overwrite, (dialog, which) -> {
+            dialog.dismiss();
+            if (downloadManager != null && state != MissionState.None) {
+                downloadManager.forgetMission(candidate);
+            }
+            continueGifCreation(intent, isGif, filename, mime);
+        });
+        askDialog.show();
+    }
+
+    private void continueGifCreation(final Intent intent, final boolean isGif,
+                                     final String filename, final String mime) {
+        final StoredFileHelper file = mainStorageVideo.createFile(filename, mime);
+        if (file == null || !file.canWrite()) {
+            showFailedDialog(R.string.error_file_creation);
+            return;
+        }
+        intent.putExtra(GifCreationService.EXTRA_OUTPUT_URI, file.getUri().toString());
+        launchGifService(intent, isGif);
+    }
+
+    private void launchGifPicker(final Intent serviceIntent, final String filename,
+                                 final String mime) {
+        pendingGifActive = true;
+        pendingGifStreamUrl = serviceIntent.getStringExtra(GifCreationService.EXTRA_STREAM_URL);
+        pendingGifStartMs = serviceIntent.getLongExtra(GifCreationService.EXTRA_START_MS, 0);
+        pendingGifEndMs = serviceIntent.getLongExtra(GifCreationService.EXTRA_END_MS, 0);
+        pendingGifFormat = serviceIntent.getStringExtra(GifCreationService.EXTRA_FORMAT);
+        pendingGifVideoTitle = serviceIntent.getStringExtra(GifCreationService.EXTRA_VIDEO_TITLE);
+
+        final Uri initialPath;
+        if (NewPipeSettings.useStorageAccessFramework(context)) {
+            initialPath = null;
+        } else {
+            initialPath = Uri.parse(
+                    NewPipeSettings.getDir(Environment.DIRECTORY_MOVIES).getAbsolutePath());
+        }
+
+        NoFileManagerSafeGuard.launchSafe(requestGifSaveAsLauncher,
+                StoredFileHelper.getNewPicker(context, filename, mime, initialPath), TAG, context);
+    }
+
+    private void requestGifSaveAsResult(@NonNull final ActivityResult result) {
+        if (result.getResultCode() != Activity.RESULT_OK || !pendingGifActive) {
+            return;
+        }
+        if (result.getData() == null || result.getData().getData() == null) {
+            showFailedDialog(R.string.general_error);
+            return;
+        }
+
+        final Uri uri = result.getData().getData();
+        try {
+            context.getContentResolver().takePersistableUriPermission(uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        } catch (final SecurityException e) {
+            Log.w(TAG, "Could not take persistable URI permission", e);
+        }
+
+        final Intent intent = new Intent(context, GifCreationService.class);
+        intent.putExtra(GifCreationService.EXTRA_STREAM_URL, pendingGifStreamUrl);
+        intent.putExtra(GifCreationService.EXTRA_START_MS, pendingGifStartMs);
+        intent.putExtra(GifCreationService.EXTRA_END_MS, pendingGifEndMs);
+        intent.putExtra(GifCreationService.EXTRA_FORMAT, pendingGifFormat);
+        intent.putExtra(GifCreationService.EXTRA_VIDEO_TITLE, pendingGifVideoTitle);
+        intent.putExtra(GifCreationService.EXTRA_OUTPUT_URI, uri.toString());
+
+        final boolean isGif = "gif".equals(pendingGifFormat);
+        pendingGifActive = false;
+        launchGifService(intent, isGif);
+    }
+
+    private void launchGifService(final Intent intent, final boolean isGif) {
+        ContextCompat.startForegroundService(context, intent);
+        Toast.makeText(context,
+                isGif ? R.string.gif_creation_started : R.string.webp_creation_started,
+                Toast.LENGTH_SHORT).show();
+        dismiss();
     }
 
     private void checkSelectedDownload(final StoredDirectoryHelper mainStorage,

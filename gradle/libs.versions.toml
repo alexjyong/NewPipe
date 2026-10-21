@@ -26,6 +26,7 @@ documentfile = "1.1.0"
 espresso = "3.7.0"
 exoplayer = "2.19.1"
 fragment = "1.9.1"
+glide = "4.15.1"
 groupie = "2.10.1"
 jsoup = "1.23.2"
 junit = "4.13.2"
@@ -117,6 +118,7 @@ evernote-statesaver-compiler = { module = "com.evernote:android-state-processor"
 evernote-statesaver-core = { module = "com.evernote:android-state", version.ref = "statesaver" }
 facebook-stetho-core = { module = "com.facebook.stetho:stetho", version.ref = "stetho" }
 facebook-stetho-okhttp3 = { module = "com.facebook.stetho:stetho-okhttp3", version.ref = "stetho" }
+glide-gifencoder = { module = "com.github.bumptech.glide:gifencoder-integration", version.ref = "glide" }
 google-android-material = { module = "com.google.android.material:material", version.ref = "material" }
 google-autoservice-annotations = { module = "com.google.auto.service:auto-service-annotations", version.ref = "autoservice-google" }
 google-exoplayer-core = { module = "com.google.android.exoplayer:exoplayer-core", version.ref = "exoplayer" }

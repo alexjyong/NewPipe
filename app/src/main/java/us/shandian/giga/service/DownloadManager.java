@@ -447,6 +447,18 @@ public class DownloadManager {
     }
 
     /**
+     * Add an externally-created finished mission (e.g. GIF creation).
+     *
+     * @param mission the finished mission to add
+     */
+    public void addFinishedMission(final FinishedMission mission) {
+        synchronized (this) {
+            mMissionsFinished.add(0, mission);
+            mFinishedMissionStore.addFinishedMission(mission);
+        }
+    }
+
+    /**
      * runs one or multiple missions in from queue if possible
      *
      * @return true if one or multiple missions are running, otherwise, false

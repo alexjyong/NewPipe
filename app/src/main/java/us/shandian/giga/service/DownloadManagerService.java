@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Objects;
 
 import us.shandian.giga.get.DownloadMission;
+import us.shandian.giga.get.FinishedMission;
 import us.shandian.giga.get.MissionRecoveryInfo;
 import us.shandian.giga.postprocessing.Postprocessing;
 import us.shandian.giga.service.DownloadManager.NetworkState;
@@ -66,6 +67,7 @@ public class DownloadManagerService extends Service {
     public static final int MESSAGE_FINISHED = 2;
     public static final int MESSAGE_ERROR = 3;
     public static final int MESSAGE_DELETED = 4;
+    public static final int MESSAGE_FINISHED_ADDED = 5;
 
     private static final int FOREGROUND_NOTIFICATION_ID = 1000;
     private static final int DOWNLOADS_NOTIFICATION_ID = 1001;
@@ -256,7 +258,8 @@ public class DownloadManagerService extends Service {
     private boolean handleMessage(@NonNull Message msg) {
         if (mHandler == null) return true;
 
-        DownloadMission mission = (DownloadMission) msg.obj;
+        DownloadMission mission = msg.obj instanceof DownloadMission
+                ? (DownloadMission) msg.obj : null;
 
         switch (msg.what) {
             case MESSAGE_FINISHED:
@@ -279,7 +282,7 @@ public class DownloadManagerService extends Service {
                 break;
         }
 
-        if (msg.what != MESSAGE_ERROR)
+        if (msg.what != MESSAGE_ERROR && mission != null)
             mFailedDownloads.remove(mFailedDownloads.indexOfValue(mission));
 
         for (Callback observer : mEchoObservers)
@@ -558,6 +561,13 @@ public class DownloadManagerService extends Service {
 
         public void addMissionEventListener(Callback handler) {
             mEchoObservers.add(handler);
+        }
+
+        public void addFinishedMission(final FinishedMission mission) {
+            mManager.addFinishedMission(mission);
+            if (mHandler != null) {
+                mHandler.sendMessage(mHandler.obtainMessage(MESSAGE_FINISHED_ADDED, mission));
+            }
         }
 
         public void removeMissionEventListener(Callback handler) {
